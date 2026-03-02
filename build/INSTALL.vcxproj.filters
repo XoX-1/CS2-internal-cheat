@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\build\CMakeFiles\a3026c912fa1589c016eeb179b6dd015\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{A5A54BED-E398-3120-AC46-DEAA1890B404}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

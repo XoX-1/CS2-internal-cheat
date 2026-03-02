@@ -1,0 +1,10 @@
+^C:\USERS\NAVEA\ONEDRIVE\שולחן העבודה\PROJECT1\MINDCHEAT\BUILD\CMAKEFILES\A3026C912FA1589C016EEB179B6DD015\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat" "-BC:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build" --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file "C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/mindcheat.sln"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

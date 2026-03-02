@@ -1,0 +1,10 @@
+^C:\USERS\NAVEA\ONEDRIVE\שולחן העבודה\PROJECT1\MINDCHEAT\VENDOR\MINHOOK\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat" "-BC:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build" --check-stamp-file "C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/vendor/minhook/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

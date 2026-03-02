@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\dllmain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\hooks\hooks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\hooks\dx11_hook.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\esp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\aimbot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\player_fov.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\bhop.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\noflash.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\nosmoke.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\glow.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\spectator_list.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\triggerbot.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\radar.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\vendor\imgui\imgui.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\vendor\imgui\imgui_demo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\vendor\imgui\imgui_draw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\vendor\imgui\imgui_tables.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\vendor\imgui\imgui_widgets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\vendor\imgui\backends\imgui_impl_win32.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\vendor\imgui\backends\imgui_impl_dx11.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{C71757AB-3FBC-38D4-8F38-B24AA8322F3C}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
