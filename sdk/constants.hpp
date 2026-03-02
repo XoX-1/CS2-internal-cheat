@@ -65,11 +65,10 @@ namespace Constants {
 
     // Input keys
     namespace Keys {
-        constexpr int AIMBOT = VK_MENU;     // ALT key
-        constexpr int MENU = VK_INSERT;     // INSERT key
-        constexpr int UNLOAD = VK_END;      // END key
-        constexpr int BHOP = VK_SPACE;      // SPACE key
-        constexpr int TRIGGERBOT = VK_XBUTTON1; // Mouse4
+        constexpr int MENU = VK_INSERT;     // INSERT key - hardcoded for menu toggle
+        constexpr int UNLOAD = VK_END;      // END key - hardcoded for unload
+        constexpr int BHOP = VK_SPACE;      // SPACE key - hardcoded for bhop
+        // Note: AIMBOT and TRIGGERBOT keys are now configurable via KeybindManager
     }
 
     // Timing constants (milliseconds)

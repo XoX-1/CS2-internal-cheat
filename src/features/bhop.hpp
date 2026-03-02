@@ -2,4 +2,5 @@
 
 namespace Bunnyhop {
     void Run();
+    void Reset();
 }

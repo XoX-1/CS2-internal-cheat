@@ -24,6 +24,7 @@ add_library(mindcheat SHARED
     src/features/spectator_list.cpp
     src/features/triggerbot.cpp
     src/features/radar.cpp
+    src/features/keybind_manager.cpp
 
     # ImGui source
     vendor/imgui/imgui.cpp

@@ -40,6 +40,9 @@
     <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\radar.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\src\features\keybind_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="C:\Users\navea\OneDrive\שולחן העבודה\project1\mindcheat\vendor\imgui\imgui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

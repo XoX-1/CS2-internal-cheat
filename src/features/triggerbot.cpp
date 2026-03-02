@@ -2,6 +2,7 @@
 #include "../hooks/hooks.hpp"
 #include "../sdk/memory.hpp"
 #include "../sdk/constants.hpp"
+#include "keybind_manager.hpp"
 #include <offsets.hpp>
 #include <client_dll.hpp>
 
@@ -30,8 +31,8 @@ namespace Triggerbot {
             return;
         }
 
-        // Only run when TRIGGERBOT key is held (MOUSE4)
-        if (!(GetAsyncKeyState(Constants::Keys::TRIGGERBOT) & 0x8000)) {
+        // Only run when TRIGGERBOT key is held
+        if (!KeybindManager::IsTriggerbotKeyPressed()) {
             s_wasTriggering = false;
             s_shotsFired = 0;
             s_lastEntityId = 0;

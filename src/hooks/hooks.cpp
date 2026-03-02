@@ -4,12 +4,14 @@
 #include "../sdk/obfuscation.hpp"
 #include "../sdk/antidebug.hpp"
 #include "../features/aimbot.hpp"
+#include "../features/bhop.hpp"
 #include "../features/player_fov.hpp"
 #include "../features/bhop.hpp"
 #include "../features/noflash.hpp"
 #include "../features/nosmoke.hpp"
 #include "../features/glow.hpp"
 #include "../features/triggerbot.hpp"
+#include "../features/keybind_manager.hpp"
 #include <offsets.hpp>
 #include <client_dll.hpp>
 #include <iostream>
@@ -80,6 +82,7 @@ namespace Hooks {
             if (CheckGameStateTransition()) {
                 Aimbot::Reset();
                 Triggerbot::Reset();
+                Bunnyhop::Reset();
             }
             
             // Check if game is in a valid state before running features
@@ -130,6 +133,9 @@ namespace Hooks {
             // For now, just log it
             std::cout << XOR_STR("[!] Warning: Analysis tool detected\n");
         }
+        
+        // Initialize keybind manager with default keys
+        KeybindManager::Initialize();
         
         MH_Initialize();
         DX11Hook::Initialize();

@@ -3,6 +3,7 @@
 #include "../sdk/memory.hpp"
 #include "../sdk/constants.hpp"
 #include "../sdk/math.hpp"
+#include "keybind_manager.hpp"
 #include <offsets.hpp>
 #include <client_dll.hpp>
 
@@ -33,6 +34,7 @@ namespace Aimbot {
     }
 
     static uintptr_t g_lockedPawn = 0;
+    static int g_targetSwitchCooldown = 0; // Frames to wait before switching targets
 
     // Cache screen dimensions from render thread (updated by ESP::Render via ImGui)
     // Aimbot thread should NOT call ImGui::GetIO() - it's not thread safe.
@@ -44,10 +46,31 @@ namespace Aimbot {
         s_screenHeight = h;
     }
 
+    // Improved bone position retrieval with fallback bones
+    static Vector3 GetBonePositionWithFallback(uintptr_t pawn, int primaryBone) {
+        Vector3 pos = GetBonePosition(pawn, primaryBone);
+        
+        // If primary bone fails, try fallback bones (pelvis, chest, neck)
+        if (pos.x == 0.0f && pos.y == 0.0f && pos.z == 0.0f) {
+            // Try pelvis
+            pos = GetBonePosition(pawn, Constants::Bones::PELVIS);
+            if (pos.x == 0.0f && pos.y == 0.0f && pos.z == 0.0f) {
+                // Try stomach
+                pos = GetBonePosition(pawn, Constants::Bones::STOMACH);
+                if (pos.x == 0.0f && pos.y == 0.0f && pos.z == 0.0f) {
+                    // Try chest
+                    pos = GetBonePosition(pawn, Constants::Bones::SPINE);
+                }
+            }
+        }
+        
+        return pos;
+    }
+
     void Run() {
         __try {
-            // Only aim while AIMBOT key is held (ALT)
-            if (!(GetAsyncKeyState(Constants::Keys::AIMBOT) & 0x8000)) {
+            // Only aim while AIMBOT key is held
+            if (!KeybindManager::IsAimbotKeyPressed()) {
                 g_lockedPawn = 0;
                 return;
             }
@@ -99,7 +122,7 @@ namespace Aimbot {
             int targetBone = Hooks::g_nAimbotBone.load();
 
             // Sticky target validation - must use SafeRead because pawn can become stale
-            // Issue 2 & 3 fix: Increased FOV multiplier and target priority system
+            // Issue 2 & 3 fix: Improved sticky targeting logic
             bool lockedTargetValid = false;
             float stickyFovMultiplier = 4.0f;
             
@@ -109,8 +132,11 @@ namespace Aimbot {
                 if (Memory::SafeRead(g_lockedPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_iHealth, hp) && 
                     Memory::SafeRead(g_lockedPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_iTeamNum, team) && 
                     hp > 0 && (Hooks::g_bFFAEnabled.load() || localTeam != team)) {
-                    Vector3 targetPos = GetBonePosition(g_lockedPawn, targetBone);
-                    if (targetPos.x != 0.0f || targetPos.y != 0.0f) {
+                    
+                    // Use improved bone position retrieval with fallback
+                    Vector3 targetPos = GetBonePositionWithFallback(g_lockedPawn, targetBone);
+                    
+                    if (targetPos.x != 0.0f || targetPos.y != 0.0f || targetPos.z != 0.0f) {
                         Vector2 screenPos;
                         if (WorldToScreen(targetPos, screenPos, viewMatrix, screenWidth, screenHeight)) {
                             float dist = sqrtf(powf(screenPos.x - screenCenter.x, 2) + powf(screenPos.y - screenCenter.y, 2));
@@ -120,18 +146,40 @@ namespace Aimbot {
                                 bestTargetAngle = Vector3::CalculateAngle(eyePos, targetPos);
                                 foundTarget = true;
                                 lockedTargetValid = true;
+                                // Reset cooldown when target is valid and in FOV
+                                g_targetSwitchCooldown = 0;
+                            } else {
+                                // Target is outside expanded FOV - don't drop immediately
+                                // Only keep valid if we have cooldown remaining
+                                if (g_targetSwitchCooldown < 10) {
+                                    bestDist = dist;
+                                    bestTargetAngle = Vector3::CalculateAngle(eyePos, targetPos);
+                                    foundTarget = true;
+                                    lockedTargetValid = true;
+                                    g_targetSwitchCooldown++;
+                                }
                             }
-                            // Don't immediately drop target - keep locked even if outside 4x FOV
-                            // Only clear if target is completely invalid or dead
                         } else {
-                            // Target not on screen - still keep locked, don't drop
+                            // Target not on screen - keep locked for a few frames with cooldown
+                            if (g_targetSwitchCooldown < 15) {
+                                bestTargetAngle = Vector3::CalculateAngle(eyePos, targetPos);
+                                foundTarget = true;
+                                lockedTargetValid = true;
+                                g_targetSwitchCooldown++;
+                            }
+                        }
+                    } else {
+                        // Bone position read failed - decrement cooldown but don't switch immediately
+                        if (g_targetSwitchCooldown < 5) {
+                            g_targetSwitchCooldown++;
                         }
                     }
                 }
             }
             
             // Only clear locked pawn if it's completely invalid (dead, invalid pointer, etc.)
-            if (!lockedTargetValid && g_lockedPawn) {
+            // and we've exhausted our cooldown period
+            if (!lockedTargetValid && g_lockedPawn && g_targetSwitchCooldown >= 15) {
                 // Check if locked target is still valid before clearing
                 int hp = 0;
                 uint8_t team = 0;
@@ -178,8 +226,8 @@ namespace Aimbot {
                     Memory::SafeRead(pawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_iTeamNum, enemyTeam);
                     if (!Hooks::g_bFFAEnabled.load() && localTeam == enemyTeam) continue;
 
-                    Vector3 targetPos = GetBonePosition(pawn, targetBone);
-                    if (targetPos.x == 0.0f && targetPos.y == 0.0f) continue;
+                    Vector3 targetPos = GetBonePositionWithFallback(pawn, targetBone);
+                    if (targetPos.x == 0.0f && targetPos.y == 0.0f && targetPos.z == 0.0f) continue;
 
                     Vector2 targetScreen;
                     if (!WorldToScreen(targetPos, targetScreen, viewMatrix, screenWidth, screenHeight)) continue;
@@ -235,6 +283,7 @@ namespace Aimbot {
     void Reset() {
         // Clear locked target on match transition
         g_lockedPawn = 0;
+        g_targetSwitchCooldown = 0;
     }
 
 } // namespace Aimbot

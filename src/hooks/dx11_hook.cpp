@@ -5,6 +5,8 @@
 #include "../features/spectator_list.hpp"
 #include "../features/triggerbot.hpp"
 #include "../features/radar.hpp"
+#include "../features/bhop.hpp"
+#include "../features/keybind_manager.hpp"
 #include <iostream>
 #include <cmath>
 
@@ -26,6 +28,7 @@ namespace DX11Hook {
 
     bool g_bInitialized = false;
     bool g_bMenuOpen = true;
+    bool g_bStartupScreen = false;  // Disabled - go straight to menu
 
     // Aimbot Prediction
     bool g_bAimbotPrediction = false;
@@ -35,6 +38,13 @@ namespace DX11Hook {
         if (msg == WM_KEYDOWN && wParam == VK_INSERT) {
             g_bMenuOpen = !g_bMenuOpen;
             return 0;
+        }
+
+        // Handle keybind listening - consume input when setting keys
+        if (KeybindManager::g_bListeningForAimbotKey.load() || KeybindManager::g_bListeningForTriggerbotKey.load()) {
+            if (KeybindManager::ProcessInputForKeybind(msg, wParam, lParam)) {
+                return 0; // Input was consumed for keybind setting
+            }
         }
 
         if (g_bMenuOpen) {
@@ -55,14 +65,18 @@ namespace DX11Hook {
 
     static float g_animTime = 0.0f;
     static float g_tabAnim[4] = { 1.0f, 0.0f, 0.0f, 0.0f };
+    static float g_bgParticlePhase = 0.0f;
 
-    static constexpr ImVec4 kAccent       = ImVec4(0.44f, 0.31f, 0.86f, 1.00f);
-    static constexpr ImVec4 kAccentGlow   = ImVec4(0.44f, 0.31f, 0.86f, 0.25f);
-    static constexpr ImVec4 kTextBright   = ImVec4(0.95f, 0.95f, 0.97f, 1.00f);
-    static constexpr ImVec4 kTextDim      = ImVec4(0.50f, 0.50f, 0.55f, 1.00f);
-    static constexpr ImVec4 kBgMain       = ImVec4(0.067f, 0.067f, 0.082f, 0.97f);
-    static constexpr ImVec4 kBgPanel      = ImVec4(0.09f, 0.09f, 0.11f, 1.00f);
-    static constexpr ImVec4 kBgWidget     = ImVec4(0.12f, 0.12f, 0.15f, 1.00f);
+    // Premium Cyberpunk-Purple Color Palette
+    static constexpr ImVec4 kAccent       = ImVec4(0.60f, 0.35f, 0.95f, 1.00f);
+    static constexpr ImVec4 kAccentGlow   = ImVec4(0.60f, 0.35f, 0.95f, 0.40f);
+    static constexpr ImVec4 kAccentDim    = ImVec4(0.40f, 0.25f, 0.70f, 1.00f);
+    static constexpr ImVec4 kTextBright   = ImVec4(0.98f, 0.98f, 1.00f, 1.00f);
+    static constexpr ImVec4 kTextDim      = ImVec4(0.55f, 0.55f, 0.62f, 1.00f);
+    static constexpr ImVec4 kBgMain       = ImVec4(0.04f, 0.04f, 0.06f, 0.98f);
+    static constexpr ImVec4 kBgPanel      = ImVec4(0.06f, 0.06f, 0.09f, 1.00f);
+    static constexpr ImVec4 kBgWidget     = ImVec4(0.10f, 0.10f, 0.14f, 1.00f);
+    static constexpr ImVec4 kGlassOverlay = ImVec4(0.08f, 0.08f, 0.12f, 0.60f);
 
     static ImU32 ToU32(ImVec4 c) {
         return IM_COL32((int)(c.x * 255), (int)(c.y * 255), (int)(c.z * 255), (int)(c.w * 255));
@@ -175,23 +189,190 @@ namespace DX11Hook {
     }
 
     // =====================================================================
+    // Keybind Button Helper
+    // =====================================================================
+    
+    static bool KeybindButton(const char* label, int* keyCode, bool isListening, float width = 120.0f) {
+        ImGui::PushID(label);
+        
+        std::string keyName = KeybindManager::GetKeyName(*keyCode);
+        std::string buttonText = isListening ? "Press any key..." : keyName;
+        
+        // Style based on state
+        if (isListening) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.60f, 0.35f, 0.95f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.45f, 1.00f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.50f, 0.30f, 0.85f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, kBgWidget);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.18f, 0.25f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.22f, 0.22f, 0.30f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, kTextBright);
+        }
+        
+        bool clicked = ImGui::Button(buttonText.c_str(), ImVec2(width, 0));
+        
+        ImGui::PopStyleColor(4);
+        ImGui::PopID();
+        
+        return clicked;
+    }
+
+    // =====================================================================
+    // RenderStartupScreen — Animated startup with big "Mindcheat" title
+    // =====================================================================
+    
+    void RenderStartupScreen() {
+        g_animTime += ImGui::GetIO().DeltaTime;
+        
+        static float buttonAnim = 0.0f;
+        static bool buttonHovered = false;
+        
+        // Center the window
+        ImGuiIO& io = ImGui::GetIO();
+        ImVec2 center(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+        
+        ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_Always);
+        
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 20.0f);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.98f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.2f, 0.5f, 0.5f));
+        
+        ImGui::Begin("##startup", nullptr, 
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | 
+                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar);
+        
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 winPos = ImGui::GetWindowPos();
+        ImVec2 winSize = ImGui::GetWindowSize();
+        
+        // Animated background gradient
+        float gradientPhase = g_animTime * 0.3f;
+        ImVec2 mousePos = io.MousePos;
+        
+        // Background glow effect
+        ImVec2 glowCenter = ImVec2(winPos.x + winSize.x * 0.5f, winPos.y + winSize.y * 0.3f);
+        float glowRadius = 250.0f + sinf(g_animTime * 0.8f) * 30.0f;
+        dl->AddCircleFilled(glowCenter, glowRadius, IM_COL32(80, 50, 150, 30), 64);
+        dl->AddCircleFilled(glowCenter, glowRadius * 0.6f, IM_COL32(100, 60, 180, 40), 64);
+        
+        // Big animated title
+        float titleScale = 1.0f + sinf(g_animTime * 2.0f) * 0.03f;
+        
+        // Title shadow
+        ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 120 * titleScale, 60));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.1f, 0.08f, 0.15f, 1.0f));
+        ImGui::SetWindowFontScale(3.0f * titleScale);
+        ImGui::Text("MINDCHEAT");
+        ImGui::PopStyleColor();
+        
+        // Main title
+        ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 122 * titleScale, 58));
+        ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
+        ImGui::SetWindowFontScale(3.0f * titleScale);
+        ImGui::Text("MINDCHEAT");
+        ImGui::PopStyleColor();
+        ImGui::SetWindowFontScale(1.0f);
+        
+        // Subtitle
+        ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 50, 115));
+        ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
+        ImGui::Text("Premium CS2 Cheat");
+        ImGui::PopStyleColor();
+        
+        // Animated line under title
+        float lineWidth = 200.0f + sinf(g_animTime * 1.5f) * 30.0f;
+        float lineX = winSize.x * 0.5f - lineWidth * 0.5f;
+        dl->AddLine(ImVec2(lineX, 145), ImVec2(lineX + lineWidth, 145), 
+                   IM_COL32(112, 80, 219, 150), 2.0f);
+        
+        // Version info
+        ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 25, 160));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.45f, 1.0f));
+        ImGui::Text("v1.0");
+        ImGui::PopStyleColor();
+        
+        // Animated Start Button - Using ImGui Button for reliability
+        float buttonWidth = 200.0f;
+        float buttonHeight = 55.0f;
+        
+        // Center the button
+        ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - buttonWidth * 0.5f, winSize.y - 120.0f));
+        
+        // Style the button
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 15.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20, 15));
+        
+        // Animated button colors
+        float pulse = (sinf(g_animTime * 3.0f) + 1.0f) * 0.5f; // 0 to 1
+        ImVec4 buttonColor = ImVec4(0.35f + pulse * 0.1f, 0.25f + pulse * 0.08f, 0.55f + pulse * 0.12f, 1.0f);
+        ImVec4 buttonHover = ImVec4(0.50f, 0.35f, 0.80f, 1.0f);
+        ImVec4 buttonActive = ImVec4(0.60f, 0.45f, 0.90f, 1.0f);
+        
+        ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonHover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonActive);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+        
+        // Big bold START button - use window font scale
+        ImGui::SetWindowFontScale(1.5f);
+        
+        if (ImGui::Button("START", ImVec2(buttonWidth, buttonHeight))) {
+            g_bStartupScreen = false;
+            g_bMenuOpen = true;
+        }
+        
+        ImGui::SetWindowFontScale(1.0f);
+        
+        // Pop styles
+        ImGui::PopStyleColor(4);
+        ImGui::PopStyleVar(2);
+        
+        // Add glow effect around button
+        ImVec2 buttonMin = ImGui::GetItemRectMin();
+        ImVec2 buttonMax = ImGui::GetItemRectMax();
+        bool isHovered = ImGui::IsItemHovered();
+        
+        if (isHovered || pulse > 0.7f) {
+            float glowAlpha = isHovered ? 100.0f : pulse * 60.0f;
+            dl->AddRect(buttonMin, buttonMax, IM_COL32(150, 100, 255, (int)glowAlpha), 
+                       15.0f, ImDrawFlags_RoundCornersAll, 3.0f);
+            dl->AddRect(buttonMin, buttonMax, IM_COL32(150, 100, 255, (int)(glowAlpha * 0.5f)), 
+                       15.0f, ImDrawFlags_RoundCornersAll, 6.0f);
+        }
+        
+        // Footer hint
+        ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 60, winSize.y - 30));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.35f, 0.4f, 1.0f));
+        ImGui::Text("Press INSERT to toggle");
+        ImGui::PopStyleColor();
+        
+        ImGui::End();
+        ImGui::PopStyleVar(1);
+        ImGui::PopStyleColor(2);
+    }
+    
+    // =====================================================================
     // RenderMenu — Premium Level-100 GUI
     // =====================================================================
 
     void RenderMenu() {
         g_animTime += ImGui::GetIO().DeltaTime;
+        g_bgParticlePhase += ImGui::GetIO().DeltaTime * 0.5f;
 
         static int activeTab = 0;
         for (int i = 0; i < 4; i++) {
             float target = (i == activeTab) ? 1.0f : 0.0f;
-            g_tabAnim[i] += (target - g_tabAnim[i]) * ImGui::GetIO().DeltaTime * 8.0f;
+            g_tabAnim[i] += (target - g_tabAnim[i]) * ImGui::GetIO().DeltaTime * 12.0f;
         }
 
-        ImGui::SetNextWindowSize(ImVec2(680, 520), ImGuiCond_FirstUseEver); // Slightly larger
+        ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f);
         ImGui::PushStyleColor(ImGuiCol_WindowBg, kBgMain);
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.22f, 0.18f, 0.35f, 0.6f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.35f, 0.25f, 0.55f, 0.50f));
 
         ImGui::Begin("##mindcheat_main", &g_bMenuOpen,
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar);
@@ -200,23 +381,54 @@ namespace DX11Hook {
         ImVec2 winPos = ImGui::GetWindowPos();
         ImVec2 winSize = ImGui::GetWindowSize();
 
+        // ============ BACKGROUND PARTICLE EFFECTS ============
+        // Animated gradient orbs in background (softer, no hard edges)
+        float time = g_animTime;
+        for (int i = 0; i < 3; i++) {
+            float phase = time * 0.2f + i * 2.0f;
+            float x = winPos.x + winSize.x * (0.3f + 0.4f * sinf(phase * 0.5f));
+            float y = winPos.y + winSize.y * (0.4f + 0.3f * sinf(phase * 0.3f + i));
+            float radius = 120.0f + 30.0f * sinf(phase);
+            int alpha = (int)(8 + 6 * sinf(phase * 1.5f));
+            // Softer gradient with more segments
+            dl->AddCircleFilled(ImVec2(x, y), radius, IM_COL32(90, 55, 160, alpha), 64);
+        }
+
         // ============ HEADER ============
-        float headerH = 60.0f; // Taller header
+        float headerH = 70.0f;
         ImVec2 headerEnd = ImVec2(winPos.x + winSize.x, winPos.y + headerH);
 
-        dl->AddRectFilled(winPos, headerEnd, IM_COL32(18, 16, 26, 255), 12.0f, ImDrawFlags_RoundCornersTop);
+        // Header with glassmorphism effect
+        dl->AddRectFilled(winPos, headerEnd, IM_COL32(12, 10, 18, 240), 16.0f, ImDrawFlags_RoundCornersTop);
+        dl->AddRectFilled(winPos, ImVec2(winPos.x + winSize.x, winPos.y + headerH * 0.7f), 
+                         IM_COL32(20, 16, 30, 180), 16.0f, ImDrawFlags_RoundCornersTop);
 
-        // Animated accent line
-        float pulseW = 140.0f + sinf(g_animTime * 1.5f) * 40.0f;
-        float pulseX = winPos.x + (winSize.x - pulseW) * 0.5f + sinf(g_animTime * 0.8f) * 80.0f;
+        // Animated accent line with glow
+        float pulseW = 180.0f + sinf(g_animTime * 2.0f) * 50.0f;
+        float pulseX = winPos.x + (winSize.x - pulseW) * 0.5f + sinf(g_animTime * 0.6f) * 60.0f;
+        
+        // Outer glow
+        dl->AddRectFilled(ImVec2(pulseX - 30, headerEnd.y - 8), ImVec2(pulseX + pulseW + 30, headerEnd.y + 6),
+                          IM_COL32(140, 90, 240, 30), 4.0f);
+        // Middle glow
+        dl->AddRectFilled(ImVec2(pulseX - 15, headerEnd.y - 4), ImVec2(pulseX + pulseW + 15, headerEnd.y + 2),
+                          IM_COL32(160, 100, 255, 60), 2.0f);
+        // Core line
         dl->AddRectFilled(ImVec2(pulseX, headerEnd.y - 2), ImVec2(pulseX + pulseW, headerEnd.y),
                           ToU32(kAccent), 1.0f);
-        dl->AddRectFilled(ImVec2(pulseX - 15, headerEnd.y - 5), ImVec2(pulseX + pulseW + 15, headerEnd.y + 3),
-                          IM_COL32(112, 80, 219, 35), 2.0f);
 
-        // Title
-        ImGui::SetCursorPos(ImVec2(24, 18));
-        ImGui::SetWindowFontScale(1.1f); // Make title slightly larger
+        // Title with glow effect
+        ImGui::SetCursorPos(ImVec2(28, 22));
+        ImGui::SetWindowFontScale(1.15f);
+        
+        // Title glow shadow
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(kAccent.x, kAccent.y, kAccent.z, 0.3f));
+        ImGui::SetCursorPos(ImVec2(30, 24));
+        ImGui::Text(ICON_FA_SHIELD_HALVED " MINDCHEAT");
+        ImGui::PopStyleColor();
+        
+        // Main title
+        ImGui::SetCursorPos(ImVec2(28, 22));
         ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
         ImGui::Text(ICON_FA_SHIELD_HALVED " MIND");
         ImGui::PopStyleColor();
@@ -226,73 +438,81 @@ namespace DX11Hook {
         ImGui::PopStyleColor();
         ImGui::SetWindowFontScale(1.0f);
 
-        ImGui::SameLine(winSize.x - 90);
-        ImGui::SetCursorPosY(20);
-        ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
-        ImGui::Text("v3.0 PRO");
+        // Version badge
+        ImGui::SameLine(winSize.x - 100);
+        ImGui::SetCursorPosY(24);
+        ImGui::PushStyleColor(ImGuiCol_Text, kAccentDim);
+        ImGui::Text("v1.0");
         ImGui::PopStyleColor();
 
         // ============ SIDEBAR + CONTENT ============
         float contentY = headerH;
-        float sidebarWidth = 140.0f;
+        float sidebarWidth = 150.0f;
         
         ImVec2 sidebarStart = ImVec2(winPos.x, winPos.y + contentY);
-        ImVec2 sidebarEnd = ImVec2(winPos.x + sidebarWidth, winPos.y + winSize.y - 22);
+        ImVec2 sidebarEnd = ImVec2(winPos.x + sidebarWidth, winPos.y + winSize.y - 28);
         
-        // Add left border/background
-        dl->AddRectFilled(sidebarStart, sidebarEnd, IM_COL32(14, 13, 21, 255), 10.0f, ImDrawFlags_RoundCornersBottomLeft);
+        // Glassmorphism sidebar background
+        dl->AddRectFilled(sidebarStart, sidebarEnd, IM_COL32(10, 9, 14, 200), 16.0f, ImDrawFlags_RoundCornersBottomLeft);
+        dl->AddRect(sidebarStart, sidebarEnd, IM_COL32(60, 45, 100, 80), 16.0f, ImDrawFlags_RoundCornersBottomLeft, 1.0f);
 
         // Sidebar Tabs
-        const char* tabLabels[] = { "LEGIT", "ESP", "VISUALS", "MISC" };
+        const char* tabLabels[] = { "AIMBOT", "ESP", "VISUALS", "MISC" };
         const char* tabIcons[] = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS };
-        float tabH = 45.0f;
+        float tabH = 50.0f;
 
         for (int i = 0; i < 4; i++) {
-            ImVec2 tabStart = ImVec2(winPos.x, winPos.y + contentY + i * tabH + 10.0f);
-            ImVec2 tabEnd = ImVec2(tabStart.x + sidebarWidth, tabStart.y + tabH);
+            ImVec2 tabStart = ImVec2(winPos.x + 8, winPos.y + contentY + i * tabH + 15.0f);
+            ImVec2 tabEnd = ImVec2(tabStart.x + sidebarWidth - 16, tabStart.y + tabH);
 
             ImGui::SetCursorScreenPos(tabStart);
             char tabId[32];
             snprintf(tabId, sizeof(tabId), "##tab%d", i);
-            ImGui::InvisibleButton(tabId, ImVec2(sidebarWidth, tabH));
+            ImGui::InvisibleButton(tabId, ImVec2(sidebarWidth - 16, tabH));
             bool hovered = ImGui::IsItemHovered();
             if (ImGui::IsItemClicked()) activeTab = i;
 
-            if (g_tabAnim[i] > 0.01f) {
-                // Left glowing accent line instead of bottom
-                dl->AddRectFilled(ImVec2(tabStart.x, tabStart.y + tabH * 0.15f),
-                                  ImVec2(tabStart.x + 3.0f, tabStart.y + tabH * 0.85f),
-                                  IM_COL32(112, 80, 219, (int)(g_tabAnim[i] * 255)), 2.0f);
+            // Tab background with animation
+            if (g_tabAnim[i] > 0.01f || hovered) {
+                float alpha = g_tabAnim[i] * 180 + (hovered && i != activeTab ? 40 : 0);
+                dl->AddRectFilled(tabStart, tabEnd, IM_COL32(80, 60, 140, (int)alpha), 10.0f);
+                
+                // Left accent glow line
+                int glowAlpha = (int)(g_tabAnim[i] * 255);
+                dl->AddRectFilled(ImVec2(tabStart.x, tabStart.y + 10),
+                                  ImVec2(tabStart.x + 3, tabEnd.y - 10),
+                                  IM_COL32(160, 100, 255, glowAlpha), 1.5f);
             }
 
             char fullLabel[64];
             snprintf(fullLabel, sizeof(fullLabel), "%s  %s", tabIcons[i], tabLabels[i]);
             
-            float scale = 1.0f + (g_tabAnim[i] * 0.05f);
+            float scale = 1.0f + (g_tabAnim[i] * 0.08f);
             ImVec2 baseTextSz = ImGui::CalcTextSize(fullLabel);
             ImVec2 textSz = ImVec2(baseTextSz.x * scale, baseTextSz.y * scale);
             
             ImVec4 textCol = Lerp4(kTextDim, kTextBright, g_tabAnim[i]);
-            if (hovered && i != activeTab) textCol = ImVec4(0.75f, 0.75f, 0.80f, 1.0f);
+            if (hovered && i != activeTab) textCol = ImVec4(0.85f, 0.85f, 0.90f, 1.0f);
             
+            // Text shadow
             dl->AddText(NULL, ImGui::GetFontSize() * scale, 
-                        ImVec2(tabStart.x + 20.0f + 1, tabStart.y + (tabH - textSz.y) * 0.5f + 1),
-                        IM_COL32(0,0,0,150), fullLabel);
-                        
+                        ImVec2(tabStart.x + 16.0f + 1, tabStart.y + (tabH - textSz.y) * 0.5f + 1),
+                        IM_COL32(0,0,0,100), fullLabel);
+            // Main text
             dl->AddText(NULL, ImGui::GetFontSize() * scale, 
-                        ImVec2(tabStart.x + 20.0f, tabStart.y + (tabH - textSz.y) * 0.5f),
+                        ImVec2(tabStart.x + 16.0f, tabStart.y + (tabH - textSz.y) * 0.5f),
                         ToU32(textCol), fullLabel);
         }
 
         // ============ CONTENT ============
-        ImGui::SetCursorPos(ImVec2(sidebarWidth + 16, contentY + 16));
+        ImGui::SetCursorPos(ImVec2(sidebarWidth + 20, contentY + 20));
 
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16, 12));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 12.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 16));
         ImGui::PushStyleColor(ImGuiCol_ChildBg, kBgPanel);
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.18f, 0.16f, 0.25f, 0.4f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.25f, 0.20f, 0.40f, 0.50f));
 
-        ImGui::BeginChild("##content", ImVec2(winSize.x - sidebarWidth - 32, winSize.y - contentY - 32 - 22), true);
+        ImGui::BeginChild("##content", ImVec2(winSize.x - sidebarWidth - 40, winSize.y - contentY - 40 - 28), true);
 
         // ============ TAB 0: LEGIT (Aimbot + Triggerbot) ============
         if (activeTab == 0) {
@@ -358,6 +578,32 @@ namespace DX11Hook {
                         case 8: Hooks::g_nAimbotBone = 25; break;  // Right Hip
                     }
                 }
+                
+                // Aimbot Keybind
+                ImGui::Spacing();
+                SectionHeader("KEYBIND");
+                ImGui::Text("Aimbot Key:");
+                ImGui::SameLine();
+                
+                int aimbotKey = KeybindManager::g_nAimbotKey.load();
+                bool listeningAimbot = KeybindManager::g_bListeningForAimbotKey.load();
+                
+                if (KeybindButton("##aimbot_key", &aimbotKey, listeningAimbot)) {
+                    if (listeningAimbot) {
+                        KeybindManager::StopListening();
+                    } else {
+                        KeybindManager::StartListeningForAimbotKey();
+                    }
+                }
+                
+                ImGui::SameLine();
+                ImGui::TextColored(kTextDim, "(Click to change)");
+                
+                // Show conflict warning if aimbot key conflicts with triggerbot
+                if (KeybindManager::HasKeyConflict()) {
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION " Conflict: Same key as Triggerbot!");
+                }
             } else if (subTab == 1) {
                 // TRIGGERBOT Section
                 SectionHeader("TRIGGERBOT");
@@ -367,71 +613,89 @@ namespace DX11Hook {
                 StyledSlider("Delay", (float*)&Triggerbot::g_nDelayMs, 0.0f, 100.0f, "%.0f ms");
                 StyledSlider("Burst", (float*)&Triggerbot::g_nBurstAmount, -1.0f, 10.0f, "%.0f");
                 
+                // Triggerbot Keybind
+                ImGui::Spacing();
+                SectionHeader("KEYBIND");
+                ImGui::Text("Triggerbot Key:");
+                ImGui::SameLine();
+                
+                int triggerbotKey = KeybindManager::g_nTriggerbotKey.load();
+                bool listeningTriggerbot = KeybindManager::g_bListeningForTriggerbotKey.load();
+                
+                if (KeybindButton("##triggerbot_key", &triggerbotKey, listeningTriggerbot)) {
+                    if (listeningTriggerbot) {
+                        KeybindManager::StopListening();
+                    } else {
+                        KeybindManager::StartListeningForTriggerbotKey();
+                    }
+                }
+                
+                ImGui::SameLine();
+                ImGui::TextColored(kTextDim, "(Click to change)");
+                
+                // Show conflict warning if triggerbot key conflicts with aimbot
+                if (KeybindManager::HasKeyConflict()) {
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION " Conflict: Same key as Aimbot!");
+                }
+                
                 ImGui::Spacing();
                 ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
-                ImGui::TextWrapped("Key: MOUSE4 (side button)");
                 ImGui::TextWrapped("Burst: -1 = Auto, 0 = Single");
                 ImGui::PopStyleColor();
             }
         }
         // ============ TAB 1: ESP ============
         else if (activeTab == 1) {
-            ImGui::Columns(2, "esp_cols", false);
-            ImGui::SetColumnWidth(0, ImGui::GetWindowWidth() * 0.5f);
+            // Master Toggle
+            ToggleSwitch("Enable ESP", &Hooks::g_bEspEnabled);
+            ImGui::Spacing();
             
-            // Box ESP
-            SectionHeader("BOX ESP");
-            ToggleSwitch("ESP Master", &Hooks::g_bEspEnabled);
             if (Hooks::g_bEspEnabled) {
+                ImGui::Columns(2, "esp_cols", false);
+                ImGui::SetColumnWidth(0, ImGui::GetWindowWidth() * 0.5f);
+                
+                // Visuals Column
+                SectionHeader("VISUALS");
                 ToggleSwitch("Bounding Box", &Hooks::g_bEspBoxes);
                 if (Hooks::g_bEspBoxes) {
                     const char* boxStyles[] = { "Full", "Corner", "Rounded" };
-                    StyledCombo("Box Style", &Hooks::g_nEspBoxStyle, boxStyles, 3);
+                    StyledCombo("Style", &Hooks::g_nEspBoxStyle, boxStyles, 3);
                 }
+                ToggleSwitch("Skeleton", &Hooks::g_bEspSkeleton);
+                ToggleSwitch("Snaplines", &Hooks::g_bEspSnaplines);
+                ToggleSwitch("Head Dot", &Hooks::g_bEspHeadDot);
+                
                 ImGui::Spacing();
+                SectionHeader("INFO");
                 ToggleSwitch("Health Bar", &Hooks::g_bEspHealth);
-                ToggleSwitch("Armor Bar", &Hooks::g_bEspArmor);
                 ToggleSwitch("Player Names", &Hooks::g_bEspNames);
-                ToggleSwitch("Show Distance", &Hooks::g_bEspDistance);
-            }
-            
-            ImGui::NextColumn();
-            
-            // Advanced ESP
-            SectionHeader("ADVANCED");
-            ToggleSwitch("Skeleton", &Hooks::g_bEspSkeleton);
-            ToggleSwitch("Snaplines", &Hooks::g_bEspSnaplines);
-            ToggleSwitch("Head Dot", &Hooks::g_bEspHeadDot);
-            
-            ImGui::Spacing();
-            SectionHeader("GLOW");
-            ToggleSwitch("Glow Enable", &Hooks::g_bGlowEnabled);
-            if (Hooks::g_bGlowEnabled) {
-                ImGui::PushStyleColor(ImGuiCol_FrameBg, kBgWidget);
-                ImGui::ColorEdit4("Glow Enemy", Hooks::g_fGlowEnemyColor,
-                                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-                ImGui::PopStyleColor();
-                ToggleSwitch("Glow Teammates", &Hooks::g_bGlowTeamEnabled);
-                if (Hooks::g_bGlowTeamEnabled) {
+                ToggleSwitch("Distance", &Hooks::g_bEspDistance);
+                
+                ImGui::NextColumn();
+                
+                // Glow Column
+                SectionHeader("GLOW");
+                ToggleSwitch("Enable Glow", &Hooks::g_bGlowEnabled);
+                if (Hooks::g_bGlowEnabled) {
                     ImGui::PushStyleColor(ImGuiCol_FrameBg, kBgWidget);
-                    ImGui::ColorEdit4("Glow Team", Hooks::g_fGlowTeamColor,
+                    ImGui::ColorEdit4("Enemy Glow", Hooks::g_fGlowEnemyColor,
                                       ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
                     ImGui::PopStyleColor();
+                    ToggleSwitch("Team Glow", &Hooks::g_bGlowTeamEnabled);
                 }
+                
+                ImGui::Spacing();
+                SectionHeader("COLORS");
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, kBgWidget);
+                ImGui::ColorEdit4("Enemy", Hooks::g_fEspEnemyColor,
+                                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+                ImGui::ColorEdit4("Team", Hooks::g_fEspTeamColor,
+                                  ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+                ImGui::PopStyleColor();
+                
+                ImGui::Columns(1);
             }
-            
-            ImGui::Columns(1);
-            
-            // Colors at bottom
-            ImGui::Spacing();
-            SectionHeader("ESP COLORS");
-            ImGui::PushStyleColor(ImGuiCol_FrameBg, kBgWidget);
-            ImGui::ColorEdit4("ESP Enemy Color", Hooks::g_fEspEnemyColor,
-                              ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-            ImGui::SameLine();
-            ImGui::ColorEdit4("ESP Team Color", Hooks::g_fEspTeamColor,
-                              ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-            ImGui::PopStyleColor();
         }
         // ============ TAB 2: VISUALS ============
         else if (activeTab == 2) {
@@ -498,14 +762,32 @@ namespace DX11Hook {
         ImGui::PopStyleVar(2);
 
         // ============ STATUS BAR ============
-        ImVec2 statusStart = ImVec2(winPos.x, winPos.y + winSize.y - 22);
+        float statusH = 28.0f;
+        ImVec2 statusStart = ImVec2(winPos.x, winPos.y + winSize.y - statusH);
+        
+        // Glassmorphism status bar
         dl->AddRectFilled(statusStart, ImVec2(winPos.x + winSize.x, winPos.y + winSize.y),
-                          IM_COL32(14, 13, 21, 255), 10.0f, ImDrawFlags_RoundCornersBottom);
-
-        float dotY = statusStart.y + 11;
-        dl->AddCircleFilled(ImVec2(winPos.x + 14, dotY), 4.0f, IM_COL32(80, 220, 100, 255));
-        dl->AddText(ImVec2(winPos.x + 24, statusStart.y + 4), ToU32(kTextDim),
-                    "Active  |  Press INSERT to toggle");
+                          IM_COL32(12, 11, 18, 220), 16.0f, ImDrawFlags_RoundCornersBottom);
+        
+        // Animated status indicator
+        float pulseDot = (sinf(g_animTime * 4.0f) + 1.0f) * 0.5f;
+        float dotY = statusStart.y + statusH * 0.5f;
+        
+        // Outer glow
+        dl->AddCircleFilled(ImVec2(winPos.x + 18, dotY), 6.0f + pulseDot * 2.0f, 
+                           IM_COL32(100, 220, 120, (int)(40 + pulseDot * 40)), 16);
+        // Inner dot
+        dl->AddCircleFilled(ImVec2(winPos.x + 18, dotY), 4.0f, 
+                           IM_COL32(100, 240, 130, 255), 12);
+        
+        // Status text with subtle glow
+        dl->AddText(ImVec2(winPos.x + 32, statusStart.y + 6), ToU32(kTextDim), "System Active");
+        
+        // Key hint on right
+        const char* hintText = "INSERT to toggle";
+        ImVec2 hintSize = ImGui::CalcTextSize(hintText);
+        dl->AddText(ImVec2(winPos.x + winSize.x - hintSize.x - 16, statusStart.y + 6), 
+                   ToU32(kTextDim), hintText);
 
         ImGui::End();
         ImGui::PopStyleColor(2);
@@ -537,30 +819,30 @@ namespace DX11Hook {
         style->PopupRounding     = 6.0f;
         style->ChildBorderSize   = 1.0f;
 
-        colors[ImGuiCol_Text]                   = ImVec4(0.92f, 0.92f, 0.94f, 1.00f);
-        colors[ImGuiCol_TextDisabled]           = ImVec4(0.40f, 0.40f, 0.45f, 1.00f);
-        colors[ImGuiCol_WindowBg]               = ImVec4(0.067f, 0.067f, 0.082f, 0.97f);
-        colors[ImGuiCol_ChildBg]                = ImVec4(0.09f, 0.09f, 0.11f, 1.00f);
-        colors[ImGuiCol_PopupBg]                = ImVec4(0.10f, 0.10f, 0.13f, 0.98f);
-        colors[ImGuiCol_Border]                 = ImVec4(0.22f, 0.18f, 0.35f, 0.50f);
-        colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-        colors[ImGuiCol_FrameBg]                = ImVec4(0.12f, 0.12f, 0.15f, 1.00f);
-        colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.18f, 0.16f, 0.25f, 1.00f);
-        colors[ImGuiCol_FrameBgActive]          = ImVec4(0.28f, 0.22f, 0.45f, 1.00f);
-        colors[ImGuiCol_TitleBg]                = ImVec4(0.05f, 0.05f, 0.07f, 1.00f);
+        colors[ImGuiCol_Text]                   = ImVec4(0.96f, 0.96f, 0.98f, 1.00f);
+        colors[ImGuiCol_TextDisabled]           = ImVec4(0.45f, 0.45f, 0.50f, 1.00f);
+        colors[ImGuiCol_WindowBg]               = ImVec4(0.04f, 0.04f, 0.06f, 0.98f);
+        colors[ImGuiCol_ChildBg]                = ImVec4(0.06f, 0.06f, 0.09f, 1.00f);
+        colors[ImGuiCol_PopupBg]                = ImVec4(0.08f, 0.08f, 0.12f, 0.98f);
+        colors[ImGuiCol_Border]                 = ImVec4(0.35f, 0.25f, 0.55f, 0.50f);
+        colors[ImGuiCol_BorderShadow]           = ImVec4(0.60f, 0.35f, 0.95f, 0.10f);
+        colors[ImGuiCol_FrameBg]                = ImVec4(0.10f, 0.10f, 0.14f, 1.00f);
+        colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.18f, 0.16f, 0.28f, 1.00f);
+        colors[ImGuiCol_FrameBgActive]          = ImVec4(0.30f, 0.22f, 0.50f, 1.00f);
+        colors[ImGuiCol_TitleBg]                = ImVec4(0.04f, 0.04f, 0.06f, 1.00f);
         colors[ImGuiCol_TitleBgActive]          = ImVec4(0.06f, 0.06f, 0.08f, 1.00f);
-        colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.05f, 0.05f, 0.07f, 1.00f);
-        colors[ImGuiCol_MenuBarBg]              = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
-        colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.06f, 0.06f, 0.08f, 1.00f);
-        colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.30f, 0.25f, 0.50f, 0.60f);
-        colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.40f, 0.32f, 0.65f, 0.80f);
-        colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.44f, 0.31f, 0.86f, 1.00f);
-        colors[ImGuiCol_CheckMark]              = ImVec4(0.44f, 0.31f, 0.86f, 1.00f);
-        colors[ImGuiCol_SliderGrab]             = ImVec4(0.44f, 0.31f, 0.86f, 0.80f);
-        colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.55f, 0.40f, 0.95f, 1.00f);
-        colors[ImGuiCol_Button]                 = ImVec4(0.14f, 0.13f, 0.18f, 1.00f);
-        colors[ImGuiCol_ButtonHovered]          = ImVec4(0.24f, 0.20f, 0.38f, 1.00f);
-        colors[ImGuiCol_ButtonActive]           = ImVec4(0.35f, 0.28f, 0.55f, 1.00f);
+        colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.04f, 0.04f, 0.06f, 1.00f);
+        colors[ImGuiCol_MenuBarBg]              = ImVec4(0.07f, 0.07f, 0.10f, 1.00f);
+        colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.05f, 0.05f, 0.08f, 1.00f);
+        colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.40f, 0.28f, 0.65f, 0.60f);
+        colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.50f, 0.35f, 0.80f, 0.80f);
+        colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.60f, 0.35f, 0.95f, 1.00f);
+        colors[ImGuiCol_CheckMark]              = ImVec4(0.60f, 0.35f, 0.95f, 1.00f);
+        colors[ImGuiCol_SliderGrab]             = ImVec4(0.60f, 0.35f, 0.95f, 0.80f);
+        colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.70f, 0.40f, 1.00f, 1.00f);
+        colors[ImGuiCol_Button]                 = ImVec4(0.14f, 0.12f, 0.20f, 1.00f);
+        colors[ImGuiCol_ButtonHovered]          = ImVec4(0.26f, 0.18f, 0.45f, 1.00f);
+        colors[ImGuiCol_ButtonActive]           = ImVec4(0.38f, 0.25f, 0.65f, 1.00f);
         colors[ImGuiCol_Header]                 = ImVec4(0.14f, 0.13f, 0.18f, 1.00f);
         colors[ImGuiCol_HeaderHovered]          = ImVec4(0.24f, 0.20f, 0.38f, 1.00f);
         colors[ImGuiCol_HeaderActive]           = ImVec4(0.35f, 0.28f, 0.55f, 1.00f);
@@ -635,6 +917,7 @@ namespace DX11Hook {
             ImGuiIO& io2 = ImGui::GetIO();
             Aimbot::UpdateScreenSize((int)io2.DisplaySize.x, (int)io2.DisplaySize.y);
 
+            // Show main menu directly (startup screen disabled)
             if (g_bMenuOpen) {
                 RenderMenu();
             }
@@ -644,6 +927,11 @@ namespace DX11Hook {
             if (Hooks::IsGameReady()) {
                 if (Hooks::g_bAimbotEnabled.load()) {
                     Aimbot::Run();
+                }
+
+                // Run bhop in render thread for maximum responsiveness
+                if (Hooks::g_bBhopEnabled.load()) {
+                    Bunnyhop::Run();
                 }
 
                 if (Hooks::g_bEspEnabled) {

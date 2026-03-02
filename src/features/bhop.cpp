@@ -6,15 +6,20 @@
 #include <client_dll.hpp>
 
 #include <windows.h>
-#include <iostream>
+#include <cstdint>
 
 namespace Bunnyhop {
 
-    void Run() {
-        if (!Hooks::g_bBhopEnabled.load()) return;
+    // Track ground state
+    static bool s_wasOnGround = false;
+    static bool s_autoHopActive = false;
 
-        // Only run if the user is holding their jump key (Spacebar)
-        if (!(GetAsyncKeyState(Constants::Keys::BHOP) & 0x8000)) return;
+    void Run() {
+        if (!Hooks::g_bBhopEnabled.load()) {
+            s_wasOnGround = false;
+            s_autoHopActive = false;
+            return;
+        }
 
         __try {
             uintptr_t clientBase = Memory::GetModuleBase("client.dll");
@@ -24,24 +29,49 @@ namespace Bunnyhop {
             if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn) || 
                 !Memory::IsValidPtr(localPawn)) return;
 
+            // Read movement flags
             uint32_t flags = 0;
             if (!Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_fFlags, flags)) return;
 
-            // CS2 jumping mechanism simulation
-            // Since this is an internal cheat without SendInput/CreateMove hooks yet,
-            // we simulate the spacebar release and press via SendMessage to trick the engine.
             bool onGround = (flags & Constants::Game::FL_ONGROUND) != 0;
 
-            if (!onGround) {
-                // In air, release spacebar to reset jump state
-                SendMessage(GetForegroundWindow(), WM_KEYUP, Constants::Keys::BHOP, 0);
+            // Check if jump key is held (user pressing space)
+            bool spaceHeld = (GetAsyncKeyState(Constants::Keys::BHOP) & 0x8000) != 0;
+            
+            // If user just started holding space, activate auto-hop
+            if (spaceHeld && !s_autoHopActive) {
+                s_autoHopActive = true;
+            }
+            
+            // Deactivate auto-hop if user releases space
+            if (!spaceHeld) {
+                s_autoHopActive = false;
+            }
+            
+            if (s_autoHopActive && onGround) {
+                // Auto-hop: press jump immediately when on ground
+                // Use keybd_event - simpler and we know it works
+                keybd_event(VK_SPACE, 0x39, 0, 0);    // Key down
+                keybd_event(VK_SPACE, 0x39, KEYEVENTF_KEYUP, 0);  // Key up immediately
+                s_wasOnGround = true;
+            } else if (!onGround && s_wasOnGround) {
+                // Was on ground last frame, now in air - we jumped!
+                s_wasOnGround = false;
+            } else if (onGround) {
+                s_wasOnGround = true;
             } else {
-                // On ground, press spacebar to jump instantly
-                SendMessage(GetForegroundWindow(), WM_KEYDOWN, Constants::Keys::BHOP, 0);
+                s_wasOnGround = false;
             }
             
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             // Silently recover
+            s_wasOnGround = false;
+            s_autoHopActive = false;
         }
+    }
+
+    void Reset() {
+        s_wasOnGround = false;
+        s_autoHopActive = false;
     }
 }
