@@ -1,7 +1,0 @@
-C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/CMakeFiles/mindcheat.dir
-C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/CMakeFiles/INSTALL.dir
-C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/CMakeFiles/ZERO_CHECK.dir
-C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/vendor/minhook/CMakeFiles/minhook.dir
-C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/vendor/minhook/CMakeFiles/INSTALL.dir
-C:/Users/navea/OneDrive/שולחן העבודה/project1/mindcheat/build/vendor/minhook/CMakeFiles/ALL_BUILD.dir
