@@ -108,6 +108,82 @@ namespace Pattern {
         return instructionAddr + instructionSize + relativeOffset;
     }
 
+    // Scan for ALL occurrences of a pattern in a module
+    inline std::vector<uintptr_t> ScanAll(const char* moduleName, const char* patternStr, size_t maxResults = 64) {
+        std::vector<uintptr_t> results;
+        uintptr_t base;
+        size_t size;
+        
+        if (!GetModuleInfo(moduleName, base, size)) return results;
+        
+        auto pattern = ParsePattern(patternStr);
+        if (pattern.empty()) return results;
+        
+        const uint8_t* data = reinterpret_cast<const uint8_t*>(base);
+        const size_t patternLen = pattern.size();
+        
+        for (size_t i = 0; i <= size - patternLen && results.size() < maxResults; ++i) {
+            bool found = true;
+            for (size_t j = 0; j < patternLen; ++j) {
+                if (pattern[j].second && data[i + j] != pattern[j].first) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                results.push_back(base + i);
+            }
+        }
+        
+        return results;
+    }
+
+    // Find a UTF-8 string in a module and return its address
+    inline uintptr_t FindString(const char* moduleName, const char* str) {
+        uintptr_t base;
+        size_t size;
+        if (!GetModuleInfo(moduleName, base, size)) return 0;
+        
+        size_t strLen = strlen(str);
+        if (strLen == 0 || strLen >= size) return 0;
+        
+        const uint8_t* data = reinterpret_cast<const uint8_t*>(base);
+        const uint8_t* needle = reinterpret_cast<const uint8_t*>(str);
+        
+        for (size_t i = 0; i <= size - strLen; ++i) {
+            if (memcmp(data + i, needle, strLen) == 0) {
+                return base + i;
+            }
+        }
+        return 0;
+    }
+
+    // Find a LEA instruction that references a specific address (lea reg, [rip+disp32])
+    // Scans for 48 8D xx patterns where the resolved target equals targetAddr
+    inline uintptr_t FindLeaRefTo(const char* moduleName, uintptr_t targetAddr) {
+        uintptr_t base;
+        size_t size;
+        if (!GetModuleInfo(moduleName, base, size)) return 0;
+        
+        const uint8_t* data = reinterpret_cast<const uint8_t*>(base);
+        
+        // LEA reg, [rip+disp32] is encoded as: REX.W(0x48) 0x8D modrm(0x05/0x0D/0x15/0x1D/0x25/0x2D/0x35/0x3D) disp32
+        for (size_t i = 0; i + 7 <= size; ++i) {
+            if (data[i] == 0x48 && data[i+1] == 0x8D) {
+                uint8_t modrm = data[i+2];
+                // modrm must have mod=00 and r/m=101 (RIP-relative): (modrm & 0xC7) == 0x05
+                if ((modrm & 0xC7) == 0x05) {
+                    int32_t disp = *reinterpret_cast<const int32_t*>(data + i + 3);
+                    uintptr_t resolved = (base + i) + 7 + disp;
+                    if (resolved == targetAddr) {
+                        return base + i;
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
     // Common CS2 patterns for dynamic offset finding
     namespace CS2Patterns {
         // Entity list pattern

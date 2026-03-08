@@ -10,8 +10,10 @@
 #include "../features/noflash.hpp"
 #include "../features/nosmoke.hpp"
 #include "../features/glow.hpp"
+#include "../features/killsound.hpp"
 #include "../features/triggerbot.hpp"
 #include "../features/keybind_manager.hpp"
+// #include "../features/inventory_changer.hpp"
 #include <offsets.hpp>
 #include <client_dll.hpp>
 #include <iostream>
@@ -30,6 +32,7 @@ namespace Hooks {
     std::atomic<bool> g_bEspHealth{true};
     std::atomic<bool> g_bEspArmor{false};
     std::atomic<bool> g_bEspNames{true};
+    std::atomic<bool> g_bEspWeaponName{true};
     std::atomic<bool> g_bEspDistance{false};
     std::atomic<bool> g_bEspSnaplines{false};
     std::atomic<bool> g_bEspSkeleton{false};
@@ -47,11 +50,14 @@ namespace Hooks {
     std::atomic<float> g_fPlayerFov{90.0f}; // Default CS2 FOV
 
     std::atomic<bool> g_bSpectatorListEnabled{false};
+    std::atomic<bool> g_bKillSoundEnabled{false};
 
     std::atomic<bool> g_bBhopEnabled{false}; // Bunnyhop
     
     std::atomic<bool> g_bNoFlashEnabled{false}; // NoFlash
     std::atomic<bool> g_bNoSmokeEnabled{false}; // NoSmoke
+
+    // std::atomic<bool> g_bInventoryChangerEnabled{false}; // Inventory Changer (disabled)
 
     std::atomic<bool> g_bGlowEnabled{false}; // Enemy Glow
     std::atomic<bool> g_bGlowTeamEnabled{false}; // Team Glow
@@ -83,6 +89,7 @@ namespace Hooks {
                 Aimbot::Reset();
                 Triggerbot::Reset();
                 Bunnyhop::Reset();
+                KillSound::Reset();
             }
             
             // Check if game is in a valid state before running features
@@ -103,9 +110,15 @@ namespace Hooks {
                 if (g_bGlowEnabled.load()) {
                     Glow::Run();
                 }
+                if (g_bKillSoundEnabled.load()) {
+                    KillSound::Run();
+                }
                 if (Triggerbot::g_bEnabled.load()) {
                     Triggerbot::Run();
                 }
+                // if (g_bInventoryChangerEnabled.load()) {
+                //     InventoryUI::Run();
+                // }
             } else {
                 // Reset features when game is not ready (loading/menu)
                 // This prevents stale pointers when entering new matches
@@ -114,6 +127,7 @@ namespace Hooks {
                 if (notReadyCounter > 500) { // Reset every ~500ms when not ready
                     Aimbot::Reset();
                     Triggerbot::Reset();
+                    KillSound::Reset();
                     notReadyCounter = 0;
                 }
             }

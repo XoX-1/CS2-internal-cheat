@@ -21,6 +21,7 @@ add_library(mindcheat SHARED
     src/features/noflash.cpp
     src/features/nosmoke.cpp
     src/features/glow.cpp
+    src/features/killsound.cpp
     src/features/spectator_list.cpp
     src/features/triggerbot.cpp
     src/features/radar.cpp
@@ -41,9 +42,11 @@ target_include_directories(mindcheat PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/sdk
     ${CMAKE_CURRENT_SOURCE_DIR}/../output          # CS2 dumper output — drop new offsets here and rebuild
+    ${CMAKE_CURRENT_SOURCE_DIR}/output             # CS2 dumper output (local copy)
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/minhook/include
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor
 )
 
 # Definitions
@@ -55,6 +58,8 @@ target_compile_definitions(mindcheat PRIVATE
 # Link Libraries — minhook target comes from add_subdirectory
 target_link_libraries(mindcheat PRIVATE
     minhook
+    comdlg32
     d3d11
     dxgi
+    winmm
 )

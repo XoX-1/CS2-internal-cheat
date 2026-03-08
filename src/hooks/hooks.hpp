@@ -28,6 +28,7 @@ namespace Hooks {
     extern std::atomic<bool> g_bEspHealth;
     extern std::atomic<bool> g_bEspArmor;
     extern std::atomic<bool> g_bEspNames;
+    extern std::atomic<bool> g_bEspWeaponName;
     extern std::atomic<bool> g_bEspDistance;
     extern std::atomic<bool> g_bEspSnaplines;
     extern std::atomic<bool> g_bEspSkeleton;
@@ -47,6 +48,7 @@ namespace Hooks {
     extern std::atomic<float> g_fPlayerFov;
 
     extern std::atomic<bool> g_bSpectatorListEnabled;
+    extern std::atomic<bool> g_bKillSoundEnabled;
 
     // Visuals extra
     extern std::atomic<bool> g_bNoFlashEnabled;
@@ -72,6 +74,9 @@ namespace Hooks {
 
     // Movement settings
     extern std::atomic<bool> g_bBhopEnabled;
+
+    // Inventory Changer (disabled)
+    // extern std::atomic<bool> g_bInventoryChangerEnabled;
 
     // Thread control
     extern std::atomic<bool> g_bRunning;

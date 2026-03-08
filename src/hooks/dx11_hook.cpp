@@ -6,7 +6,10 @@
 #include "../features/triggerbot.hpp"
 #include "../features/radar.hpp"
 #include "../features/bhop.hpp"
+#include "../features/killsound.hpp"
 #include "../features/keybind_manager.hpp"
+// #include "../features/inventory_changer.hpp"
+// #include "../features/texture_manager.hpp"
 #include <iostream>
 #include <cmath>
 
@@ -60,11 +63,12 @@ namespace DX11Hook {
     // Premium GUI — Accent Colors & Helpers
     // =====================================================================
 
-    // Include FontAwesome header
     #include "../vendor/imgui/IconsFontAwesome6.h"
+    #include "../src/fonts/roboto_medium.h"
+    #include "../src/fonts/fa_solid_900.h"
 
     static float g_animTime = 0.0f;
-    static float g_tabAnim[4] = { 1.0f, 0.0f, 0.0f, 0.0f };
+    static float g_tabAnim[5] = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f }; // 5 tabs (no SKINS)
     static float g_bgParticlePhase = 0.0f;
 
     // Premium Cyberpunk-Purple Color Palette
@@ -363,7 +367,7 @@ namespace DX11Hook {
         g_bgParticlePhase += ImGui::GetIO().DeltaTime * 0.5f;
 
         static int activeTab = 0;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 5; i++) {
             float target = (i == activeTab) ? 1.0f : 0.0f;
             g_tabAnim[i] += (target - g_tabAnim[i]) * ImGui::GetIO().DeltaTime * 12.0f;
         }
@@ -457,12 +461,18 @@ namespace DX11Hook {
         dl->AddRect(sidebarStart, sidebarEnd, IM_COL32(60, 45, 100, 80), 16.0f, ImDrawFlags_RoundCornersBottomLeft, 1.0f);
 
         // Sidebar Tabs
-        const char* tabLabels[] = { "AIMBOT", "ESP", "VISUALS", "MISC" };
-        const char* tabIcons[] = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS };
+        const char* tabLabels[] = { "LEGIT", "ESP", "VISUALS", "MISC", "KILL SOUND" };
+        const char* tabIcons[] = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS, ICON_FA_MUSIC };
         float tabH = 50.0f;
+        float tabStartY = contentY + 15.0f;
+        float tabAreaHeight = (winSize.y - 28.0f) - tabStartY - 10.0f;
+        float requiredHeight = 5.0f * tabH;
+        if (requiredHeight > tabAreaHeight && tabAreaHeight > 120.0f) {
+            tabH = tabAreaHeight / 5.0f;
+        }
 
-        for (int i = 0; i < 4; i++) {
-            ImVec2 tabStart = ImVec2(winPos.x + 8, winPos.y + contentY + i * tabH + 15.0f);
+        for (int i = 0; i < 5; i++) {
+            ImVec2 tabStart = ImVec2(winPos.x + 8, winPos.y + tabStartY + i * tabH);
             ImVec2 tabEnd = ImVec2(tabStart.x + sidebarWidth - 16, tabStart.y + tabH);
 
             ImGui::SetCursorScreenPos(tabStart);
@@ -517,6 +527,8 @@ namespace DX11Hook {
         // ============ TAB 0: LEGIT (Aimbot + Triggerbot) ============
         if (activeTab == 0) {
             static int subTab = 0;
+            bool aimbotSelected = (subTab == 0);
+            bool triggerbotSelected = (subTab == 1);
             
             // Sub-tabs styling
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
@@ -525,26 +537,26 @@ namespace DX11Hook {
             
             ImVec2 buttonSize = ImVec2(120, 30);
             
-            if (subTab == 0) {
+            if (aimbotSelected) {
                 ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.16f, 0.25f, 1.0f));
             } else {
                 ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
             }
             if (ImGui::Button("AIMBOT", buttonSize)) subTab = 0;
-            if (subTab == 0) ImGui::PopStyleColor();
+            if (aimbotSelected) ImGui::PopStyleColor();
             ImGui::PopStyleColor();
             
             ImGui::SameLine();
             
-            if (subTab == 1) {
+            if (triggerbotSelected) {
                 ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.16f, 0.25f, 1.0f));
             } else {
                 ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
             }
             if (ImGui::Button("TRIGGERBOT", buttonSize)) subTab = 1;
-            if (subTab == 1) ImGui::PopStyleColor();
+            if (triggerbotSelected) ImGui::PopStyleColor();
             ImGui::PopStyleColor();
             
             ImGui::PopStyleColor(3);
@@ -610,8 +622,15 @@ namespace DX11Hook {
                 ToggleSwitch("Enable Triggerbot", &Triggerbot::g_bEnabled);
                 ToggleSwitch("Trigger Team Check", &Triggerbot::g_bTeamCheck);
                 ImGui::Spacing();
-                StyledSlider("Delay", (float*)&Triggerbot::g_nDelayMs, 0.0f, 100.0f, "%.0f ms");
-                StyledSlider("Burst", (float*)&Triggerbot::g_nBurstAmount, -1.0f, 10.0f, "%.0f");
+                {
+                    const char* fireModes[] = { "Tapping", "Lazer" };
+                    int mode = Triggerbot::g_nFireMode.load();
+                    ImGui::Text("Fire Mode:");
+                    ImGui::SetNextItemWidth(-1);
+                    if (ImGui::Combo("##FireMode", &mode, fireModes, 2)) {
+                        Triggerbot::g_nFireMode.store(mode);
+                    }
+                }
                 
                 // Triggerbot Keybind
                 ImGui::Spacing();
@@ -670,6 +689,7 @@ namespace DX11Hook {
                 SectionHeader("INFO");
                 ToggleSwitch("Health Bar", &Hooks::g_bEspHealth);
                 ToggleSwitch("Player Names", &Hooks::g_bEspNames);
+                ToggleSwitch("Weapon Name", &Hooks::g_bEspWeaponName);
                 ToggleSwitch("Distance", &Hooks::g_bEspDistance);
                 
                 ImGui::NextColumn();
@@ -748,15 +768,67 @@ namespace DX11Hook {
             ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
             ImGui::TextWrapped("Hold SPACE");
             ImGui::PopStyleColor();
-            
+
+            ImGui::Spacing();
             ImGui::NextColumn();
             
             SectionHeader("INFORMATION");
             ToggleSwitch("Spectator List", &Hooks::g_bSpectatorListEnabled);
-            
+
             ImGui::Columns(1);
         }
+        // ============ TAB 4: KILL SOUND ============
+        else if (activeTab == 4) {
+            SectionHeader("KILL SOUND CHANGER");
+            ToggleSwitch("Enable Kill Sound", &Hooks::g_bKillSoundEnabled);
+            ImGui::Spacing();
 
+            auto files = KillSound::GetFileList();
+            int selectedIndex = KillSound::GetSelectedIndex();
+            int appliedIndex = KillSound::GetAppliedIndex();
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, kBgWidget);
+            ImGui::BeginChild("##killsound_list", ImVec2(0, ImGui::GetContentRegionAvail().y - 44.0f), true);
+
+            if (files.empty()) {
+                ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
+                ImGui::TextWrapped("No files added. Click Browse to add .mp3 or .wav files.");
+                ImGui::PopStyleColor();
+            } else {
+                for (int i = 0; i < static_cast<int>(files.size()); ++i) {
+                    std::string fileName = files[i];
+                    size_t slashPos = fileName.find_last_of("\\/");
+                    if (slashPos != std::string::npos && slashPos + 1 < fileName.size()) {
+                        fileName = fileName.substr(slashPos + 1);
+                    }
+
+                    if (i == appliedIndex) {
+                        fileName += "  [APPLIED]";
+                    }
+
+                    if (ImGui::Selectable(fileName.c_str(), selectedIndex == i)) {
+                        KillSound::SetSelectedIndex(i);
+                        selectedIndex = i;
+                    }
+                }
+            }
+
+            ImGui::EndChild();
+            ImGui::PopStyleColor();
+
+            float applyWidth = 90.0f;
+            float browseWidth = 90.0f;
+            float totalWidth = applyWidth + browseWidth + ImGui::GetStyle().ItemSpacing.x;
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - totalWidth);
+
+            if (ImGui::Button("Apply", ImVec2(applyWidth, 0))) {
+                KillSound::ApplySelected();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Browse", ImVec2(browseWidth, 0))) {
+                KillSound::BrowseAndAddFiles(g_hWnd);
+            }
+        }
         ImGui::EndChild();
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(2);
@@ -887,23 +959,25 @@ namespace DX11Hook {
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-                // Load custom fonts
-                std::string robotoPath = "C:\\Users\\navea\\OneDrive\\\xD7\xA9\xD7\x95\xD7\x9C\xD7\x97\xD7\x9F \xD7\x94\xD7\xA2\xD7\x91\xD7\x95\xD7\x93\xD7\x94\\project1\\mindcheat\\vendor\\imgui\\misc\\fonts\\Roboto-Medium.ttf";
-                std::string faPath = "C:\\Users\\navea\\OneDrive\\\xD7\xA9\xD7\x95\xD7\x9C\xD7\x97\xD7\x9F \xD7\x94\xD7\xA2\xD7\x91\xD7\x95\xD7\x93\xD7\x94\\project1\\mindcheat\\vendor\\imgui\\misc\\fonts\\fa-solid-900.ttf";
-                
-                io.Fonts->AddFontFromFileTTF(robotoPath.c_str(), 16.0f);
+                // Load fonts embedded in binary — no file paths needed at runtime
+                ImFont* mainFont = io.Fonts->AddFontFromMemoryCompressedTTF(
+                    RobotoMedium_compressed_data, RobotoMedium_compressed_size, 16.0f);
+                if (!mainFont) {
+                    io.Fonts->AddFontDefault();
+                }
 
+                // Merge FontAwesome icons into the main font
                 static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
                 ImFontConfig icons_config;
                 icons_config.MergeMode = true;
                 icons_config.PixelSnapH = true;
-                icons_config.FontDataOwnedByAtlas = false;
-                
-                io.Fonts->AddFontFromFileTTF(faPath.c_str(), 16.0f, &icons_config, icons_ranges);
+                io.Fonts->AddFontFromMemoryCompressedTTF(
+                    FaSolid900_compressed_data, FaSolid900_compressed_size, 16.0f, &icons_config, icons_ranges);
 
                 ApplyCustomStyle();
                 ImGui_ImplWin32_Init(g_hWnd);
                 ImGui_ImplDX11_Init(g_pDevice, g_pContext);
+                // TextureMgr::Init(g_pDevice);
 
                 g_bInitialized = true;
             }
@@ -1023,6 +1097,7 @@ namespace DX11Hook {
         }
 
         if (g_bInitialized) {
+            // TextureMgr::Shutdown();
             ImGui_ImplDX11_Shutdown();
             ImGui_ImplWin32_Shutdown();
             ImGui::DestroyContext();

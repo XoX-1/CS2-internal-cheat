@@ -13,8 +13,7 @@
 namespace Triggerbot {
     std::atomic<bool> g_bEnabled{false};
     std::atomic<bool> g_bTeamCheck{true};
-    std::atomic<int> g_nDelayMs{10};
-    std::atomic<int> g_nBurstAmount{0};
+    std::atomic<int> g_nFireMode{MODE_TAPPING};
     std::atomic<float> g_fMaxDistance{5000.0f};
 
     // State tracking
@@ -25,6 +24,7 @@ namespace Triggerbot {
 
     void Run() {
         if (!g_bEnabled.load()) {
+            if (s_wasTriggering) mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
             s_wasTriggering = false;
             s_shotsFired = 0;
             s_lastEntityId = 0;
@@ -33,6 +33,7 @@ namespace Triggerbot {
 
         // Only run when TRIGGERBOT key is held
         if (!KeybindManager::IsTriggerbotKeyPressed()) {
+            if (s_wasTriggering) mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
             s_wasTriggering = false;
             s_shotsFired = 0;
             s_lastEntityId = 0;
@@ -72,6 +73,7 @@ namespace Triggerbot {
 
             // If no entity under crosshair, reset and return
             if (idEntIndex <= 0 || idEntIndex > 2048) {
+                if (s_wasTriggering) mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
                 s_wasTriggering = false;
                 s_shotsFired = 0;
                 s_lastEntityId = 0;
@@ -80,6 +82,7 @@ namespace Triggerbot {
 
             // Check if entity changed - if so, reset burst counter
             if ((DWORD)idEntIndex != s_lastEntityId) {
+                if (s_wasTriggering) mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
                 s_shotsFired = 0;
                 s_wasTriggering = false;
             }
@@ -131,43 +134,27 @@ namespace Triggerbot {
                 }
             }
 
-            // We have a valid target - apply delay if configured
-            auto now = std::chrono::steady_clock::now();
-            
-            if (!s_wasTriggering && g_nDelayMs.load() > 0) {
-                s_lastShotTime = now;
+            // Tapping mode: rapid single shots (click-release each frame)
+            if (g_nFireMode.load() == MODE_TAPPING) {
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                Sleep(Constants::Timing::TRIGGER_DELAY_MS);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                s_shotsFired++;
                 s_wasTriggering = true;
-                Sleep(g_nDelayMs.load());
-            }
-
-            // Check burst limit
-            int burstAmount = g_nBurstAmount.load();
-            if (burstAmount > 0 && s_shotsFired >= burstAmount) {
-                return; // Burst complete
-            }
-
-            // Fire the weapon using mouse_event
-            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-            Sleep(Constants::Timing::TRIGGER_DELAY_MS);
-            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-            
-            s_shotsFired++;
-            s_wasTriggering = true;
-            s_lastShotTime = now;
-
-            // Small delay between shots to prevent over-firing
-            if (burstAmount != 0) {
-                Sleep(Constants::Timing::BURST_DELAY_MS);
+            } else {
+                // Lazer mode: hold mouse down while on target
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                s_wasTriggering = true;
             }
 
         } __except (EXCEPTION_EXECUTE_HANDLER) {
-            // Silently handle exceptions
+            if (s_wasTriggering) mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
             s_wasTriggering = false;
         }
     }
 
     void Reset() {
-        // Reset triggerbot state on match transition
+        if (s_wasTriggering) mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
         s_wasTriggering = false;
         s_shotsFired = 0;
         s_lastEntityId = 0;

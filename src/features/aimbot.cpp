@@ -35,6 +35,7 @@ namespace Aimbot {
 
     static uintptr_t g_lockedPawn = 0;
     static int g_targetSwitchCooldown = 0; // Frames to wait before switching targets
+    static ULONGLONG g_lastAimTick = 0;
 
     // Cache screen dimensions from render thread (updated by ESP::Render via ImGui)
     // Aimbot thread should NOT call ImGui::GetIO() - it's not thread safe.
@@ -72,6 +73,7 @@ namespace Aimbot {
             // Only aim while AIMBOT key is held
             if (!KeybindManager::IsAimbotKeyPressed()) {
                 g_lockedPawn = 0;
+                g_lastAimTick = 0;
                 return;
             }
 
@@ -245,34 +247,41 @@ namespace Aimbot {
 
             // Apply aim
             if (foundTarget) {
-                // Standard Smooth Aim - improved smoothing for smooth=1.0
+                // Fast smoothing with low-FPS compensation (keeps old responsive feel)
                 bestTargetAngle.Clamp();
                 float smooth = Hooks::g_fAimbotSmooth.load();
+                ULONGLONG nowTick = GetTickCount64();
+                if (g_lastAimTick == 0) g_lastAimTick = nowTick;
+                float dt = static_cast<float>(nowTick - g_lastAimTick) / 1000.0f;
+                g_lastAimTick = nowTick;
+                if (dt < 0.001f) dt = 0.001f;
+                if (dt > 0.100f) dt = 0.100f;
                 
-                // Apply smoothing - even smooth=1.0 has minimal smoothing for smoothness
-                // Use exponential smoothing for smoother feel at higher values
+                // Preserve previous fast behavior and scale by frame time (60 FPS baseline)
                 if (smooth >= 1.0f) {
                     QAngle delta = bestTargetAngle - currentAngles;
                     delta.Clamp();
                     
-                    // Minimum smoothing factor for smooth=1.0 (divides by 1.2)
-                    // Higher smooth values scale up gradually for smoother movement
                     float smoothFactor = (smooth - 1.0f) * 0.3f + 1.2f;
                     
-                    // Reduce smoothing when shooting for faster response
-                    // Check if left mouse button is pressed (attack)
                     if (GetAsyncKeyState(0x01) & 0x8000) {
-                        smoothFactor = 1.2f; // Very fast response when shooting
+                        smoothFactor = 1.2f;
                     }
+
+                    float frameComp = dt / (1.0f / 60.0f);
+                    if (frameComp < 0.5f) frameComp = 0.5f;
+                    if (frameComp > 3.0f) frameComp = 3.0f;
                     
-                    currentAngles.x += delta.x / smoothFactor;
-                    currentAngles.y += delta.y / smoothFactor;
+                    currentAngles.x += (delta.x / smoothFactor) * frameComp;
+                    currentAngles.y += (delta.y / smoothFactor) * frameComp;
                 } else {
                     currentAngles = bestTargetAngle;
                 }
 
                 currentAngles.Clamp();
                 Memory::SafeWrite(clientBase + cs2_dumper::offsets::client_dll::dwViewAngles, currentAngles);
+            } else {
+                g_lastAimTick = 0;
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             // Silently recover from any access violation
@@ -284,6 +293,7 @@ namespace Aimbot {
         // Clear locked target on match transition
         g_lockedPawn = 0;
         g_targetSwitchCooldown = 0;
+        g_lastAimTick = 0;
     }
 
 } // namespace Aimbot
