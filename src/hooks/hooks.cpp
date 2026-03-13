@@ -105,9 +105,6 @@ namespace Hooks {
                 if (g_bNoSmokeEnabled.load()) {
                     NoSmoke::Run();
                 }
-                if (g_bGlowEnabled.load()) {
-                    Glow::Run();
-                }
                 if (g_bKillSoundEnabled.load()) {
                     KillSound::Run();
                 }
