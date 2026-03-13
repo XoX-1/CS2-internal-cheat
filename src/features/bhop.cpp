@@ -4,20 +4,25 @@
 #include "../sdk/constants.hpp"
 #include <offsets.hpp>
 #include <client_dll.hpp>
-
+#include <buttons.hpp>
 #include <windows.h>
 #include <cstdint>
 
 namespace Bunnyhop {
 
-    // Track ground state
-    static bool s_wasOnGround = false;
-    static bool s_autoHopActive = false;
+    // CS2 button state values for direct memory write
+    // The jump button global at clientBase + buttons::jump is a uint32 state:
+    //   65537 (0x10001) = force press
+    //   256   (0x100)   = release / idle
+    static constexpr uint32_t BTN_FORCE_DOWN = 65537;
+    static constexpr uint32_t BTN_RELEASE    = 256;
+
+    // State: tracks whether we pressed jump and are waiting for airborne release
+    static bool s_jumpPressed = false;
 
     void Run() {
         if (!Hooks::g_bBhopEnabled.load()) {
-            s_wasOnGround = false;
-            s_autoHopActive = false;
+            s_jumpPressed = false;
             return;
         }
 
@@ -34,44 +39,62 @@ namespace Bunnyhop {
             if (!Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_fFlags, flags)) return;
 
             bool onGround = (flags & Constants::Game::FL_ONGROUND) != 0;
-
-            // Check if jump key is held (user pressing space)
             bool spaceHeld = (GetAsyncKeyState(Constants::Keys::BHOP) & 0x8000) != 0;
-            
-            // If user just started holding space, activate auto-hop
-            if (spaceHeld && !s_autoHopActive) {
-                s_autoHopActive = true;
-            }
-            
-            // Deactivate auto-hop if user releases space
+
             if (!spaceHeld) {
-                s_autoHopActive = false;
+                // User released space — make sure button is released
+                if (s_jumpPressed) {
+                    Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_RELEASE);
+                    s_jumpPressed = false;
+                }
+                return;
             }
-            
-            if (s_autoHopActive && onGround) {
-                // Auto-hop: press jump immediately when on ground
-                // Use keybd_event - simpler and we know it works
-                keybd_event(VK_SPACE, 0x39, 0, 0);    // Key down
-                keybd_event(VK_SPACE, 0x39, KEYEVENTF_KEYUP, 0);  // Key up immediately
-                s_wasOnGround = true;
-            } else if (!onGround && s_wasOnGround) {
-                // Was on ground last frame, now in air - we jumped!
-                s_wasOnGround = false;
-            } else if (onGround) {
-                s_wasOnGround = true;
-            } else {
-                s_wasOnGround = false;
+
+            // Space is held — bhop logic
+            if (onGround) {
+                // On ground: press jump
+                Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_FORCE_DOWN);
+                s_jumpPressed = true;
+            } else if (s_jumpPressed) {
+                // In air after our jump: release so it can re-trigger on next landing
+                Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_RELEASE);
+                s_jumpPressed = false;
             }
             
         } __except (EXCEPTION_EXECUTE_HANDLER) {
+            s_jumpPressed = false;
+        }
+    }
+
+    // Called from game thread (Present hook) — zeroes stamina & velocity modifier
+    // to prevent any speed penalty from consecutive jumps.
+    void RunGameThread() {
+        if (!Hooks::g_bBhopEnabled.load()) return;
+
+        __try {
+            uintptr_t clientBase = Memory::GetModuleBase("client.dll");
+            if (!clientBase) return;
+
+            uintptr_t localPawn = 0;
+            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn) ||
+                !Memory::IsValidPtr(localPawn)) return;
+
+            // Zero stamina on MovementServices — prevents landing slowdown
+            uintptr_t moveServices = 0;
+            if (Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BasePlayerPawn::m_pMovementServices, moveServices) &&
+                Memory::IsValidPtr(moveServices)) {
+                Memory::SafeWrite<float>(moveServices + cs2_dumper::schemas::client_dll::CCSPlayer_MovementServices::m_flStamina, 0.0f);
+            }
+
+            // Keep velocity modifier at 1.0 — prevents any speed reduction
+            Memory::SafeWrite<float>(localPawn + cs2_dumper::schemas::client_dll::C_CSPlayerPawn::m_flVelocityModifier, 1.0f);
+
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
             // Silently recover
-            s_wasOnGround = false;
-            s_autoHopActive = false;
         }
     }
 
     void Reset() {
-        s_wasOnGround = false;
-        s_autoHopActive = false;
+        s_jumpPressed = false;
     }
 }

@@ -62,4 +62,35 @@ target_link_libraries(mindcheat PRIVATE
     d3d11
     dxgi
     winmm
+    wininet
+)
+
+# =========================================================================
+# Injector executable — Manual Map injector with stealth features
+# =========================================================================
+add_executable(mindcheat_injector
+    injector/main.cpp
+)
+
+target_compile_definitions(mindcheat_injector PRIVATE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX
+)
+
+# Embed admin manifest for UAC elevation
+set_target_properties(mindcheat_injector PROPERTIES
+    LINK_FLAGS "/MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\""
+)
+
+set_target_properties(mindcheat_injector PROPERTIES
+    OUTPUT_NAME "mindcheat_injector"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
+# Copy the DLL next to the injector after build
+add_custom_command(TARGET mindcheat_injector POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:mindcheat>"
+        "$<TARGET_FILE_DIR:mindcheat_injector>/mindcheat.dll"
+    COMMENT "Copying mindcheat.dll next to injector"
 )

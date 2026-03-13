@@ -74,6 +74,33 @@ vendor/          — Third-party libraries (ImGui, MinHook, stb_image)
 output/          — Auto-generated offset dumps
 ```
 
+## Updating Offsets Quickly
+
+If your new dumps are written directly into this project's `output/` folder, just run:
+
+```cmd
+py scripts\update_offsets.py
+```
+
+If your dump is in another folder, pass that path:
+
+```cmd
+py scripts\update_offsets.py "C:\path\to\new\output"
+```
+
+This script will:
+- Replace project `output/` with the new dump
+- Refresh `sdk/offsets.hpp` from `output/offsets.hpp`
+- Refresh `sdk/client_dll.hpp` from `output/client_dll.hpp`
+
+If your path is a parent folder that contains `output/`, the script detects it automatically.
+
+Optional auto mode (keeps watching for changes and re-syncs automatically):
+
+```cmd
+py scripts\update_offsets.py --watch
+```
+
 ---
 
 ## Disclaimer

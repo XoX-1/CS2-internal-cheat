@@ -13,7 +13,6 @@
 #include "../features/killsound.hpp"
 #include "../features/triggerbot.hpp"
 #include "../features/keybind_manager.hpp"
-// #include "../features/inventory_changer.hpp"
 #include <offsets.hpp>
 #include <client_dll.hpp>
 #include <iostream>
@@ -57,7 +56,7 @@ namespace Hooks {
     std::atomic<bool> g_bNoFlashEnabled{false}; // NoFlash
     std::atomic<bool> g_bNoSmokeEnabled{false}; // NoSmoke
 
-    // std::atomic<bool> g_bInventoryChangerEnabled{false}; // Inventory Changer (disabled)
+    std::atomic<bool> g_bInventoryChangerEnabled{false}; // Inventory Changer
 
     std::atomic<bool> g_bGlowEnabled{false}; // Enemy Glow
     std::atomic<bool> g_bGlowTeamEnabled{false}; // Team Glow
@@ -116,9 +115,7 @@ namespace Hooks {
                 if (Triggerbot::g_bEnabled.load()) {
                     Triggerbot::Run();
                 }
-                // if (g_bInventoryChangerEnabled.load()) {
-                //     InventoryUI::Run();
-                // }
+                // Inventory changer was removed from this build.
             } else {
                 // Reset features when game is not ready (loading/menu)
                 // This prevents stale pointers when entering new matches
@@ -178,6 +175,19 @@ namespace Hooks {
         
         uintptr_t engineBase = Memory::GetModuleBase("engine2.dll");
         if (!engineBase) return false;
+
+        // Check SignOnState — must be SIGNONSTATE_FULL (6) to be in-game.
+        // This drops below 6 BEFORE entities are freed during disconnect.
+        uintptr_t networkClient = 0;
+        if (!Memory::SafeRead(engineBase + cs2_dumper::offsets::engine2_dll::dwNetworkGameClient, networkClient) ||
+            !Memory::IsValidPtr(networkClient)) {
+            return false;
+        }
+        int signOnState = 0;
+        if (!Memory::SafeRead(networkClient + cs2_dumper::offsets::engine2_dll::dwNetworkGameClient_signOnState, signOnState) ||
+            signOnState != 6) {
+            return false;
+        }
         
         // Check if we have a valid local player
         uintptr_t localPawn = 0;

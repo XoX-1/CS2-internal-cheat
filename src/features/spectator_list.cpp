@@ -1,4 +1,4 @@
-﻿#include "spectator_list.hpp"
+#include "spectator_list.hpp"
 #include "../hooks/hooks.hpp"
 #include "../sdk/memory.hpp"
 #include "../sdk/constants.hpp"
@@ -72,13 +72,16 @@ namespace SpectatorList {
 
                 // Check if they are watching us
                 if (targetPawn == localPawn) {
-                    const char* namePtr = reinterpret_cast<const char*>(controller + 
-                                     cs2_dumper::schemas::client_dll::CBasePlayerController::m_iszPlayerName);
-                    if (namePtr && namePtr[0] && namePtr[0] > 0x20 && namePtr[0] < 0x7F) {
-                        // Copy name safely to raw C-array to avoid C2712 unwinding errors with std::string
+                    char nameBuf[128] = { 0 };
+                    uintptr_t nameAddr = controller + 
+                                     cs2_dumper::schemas::client_dll::CBasePlayerController::m_iszPlayerName;
+                    SIZE_T bytesRead = 0;
+                    if (ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<LPCVOID>(nameAddr), nameBuf, sizeof(nameBuf) - 1, &bytesRead) &&
+                        bytesRead > 0 && nameBuf[0] > 0x20 && nameBuf[0] < 0x7F) {
+                        nameBuf[sizeof(nameBuf) - 1] = '\0';
                         for (int c = 0; c < 127; c++) {
-                            outNames[outCount][c] = namePtr[c];
-                            if (namePtr[c] == '\0') break;
+                            outNames[outCount][c] = nameBuf[c];
+                            if (nameBuf[c] == '\0') break;
                         }
                         outNames[outCount][127] = '\0';
                         outCount++;

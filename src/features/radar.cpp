@@ -420,12 +420,14 @@ namespace Radar {
 
                 // ============ Player name ============
                 if (showNames && !outsideRange) {
-                    const char* name = reinterpret_cast<const char*>(
-                        controller + cs2_dumper::schemas::client_dll::CBasePlayerController::m_iszPlayerName);
-                    if (name && name[0] && name[0] > 0x20 && name[0] < 0x7F) {
-                        // Truncate long names
-                        char shortName[12];
-                        snprintf(shortName, sizeof(shortName), "%.10s", name);
+                    char shortName[12] = { 0 };
+                    char nameBuf[128] = { 0 };
+                    uintptr_t nameAddr = controller + cs2_dumper::schemas::client_dll::CBasePlayerController::m_iszPlayerName;
+                    SIZE_T bytesRead = 0;
+                    if (ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<LPCVOID>(nameAddr), nameBuf, sizeof(nameBuf) - 1, &bytesRead) &&
+                        bytesRead > 0 && nameBuf[0] > 0x20 && nameBuf[0] < 0x7F) {
+                        nameBuf[sizeof(nameBuf) - 1] = '\0';
+                        snprintf(shortName, sizeof(shortName), "%.10s", nameBuf);
 
                         ImVec2 nameSz = ImGui::CalcTextSize(shortName);
                         float nameX = dotPos.x - nameSz.x * 0.5f;

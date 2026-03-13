@@ -75,8 +75,8 @@ namespace Hooks {
     // Movement settings
     extern std::atomic<bool> g_bBhopEnabled;
 
-    // Inventory Changer (disabled)
-    // extern std::atomic<bool> g_bInventoryChangerEnabled;
+    // Inventory Changer
+    extern std::atomic<bool> g_bInventoryChangerEnabled;
 
     // Thread control
     extern std::atomic<bool> g_bRunning;

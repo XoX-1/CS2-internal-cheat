@@ -1,4 +1,4 @@
-﻿#include "esp.hpp"
+#include "esp.hpp"
 #include "../hooks/hooks.hpp"
 #include "../sdk/memory.hpp"
 #include "../sdk/constants.hpp"
@@ -189,8 +189,9 @@ namespace ESP {
             Memory::SafeRead(localSceneNode + cs2_dumper::schemas::client_dll::CGameSceneNode::m_vecAbsOrigin, localOrigin);
         }
 
-        view_matrix_t viewMatrix;
-        memcpy(&viewMatrix, reinterpret_cast<void*>(clientBase + cs2_dumper::offsets::client_dll::dwViewMatrix), sizeof(view_matrix_t));
+        view_matrix_t viewMatrix{};
+        if (!Memory::SafeReadBytes(clientBase + cs2_dumper::offsets::client_dll::dwViewMatrix,
+                       &viewMatrix, sizeof(viewMatrix))) return;
 
         ImGuiIO& io = ImGui::GetIO();
         int screenW = static_cast<int>(io.DisplaySize.x);
@@ -316,14 +317,16 @@ namespace ESP {
 
                 // NAME
                 if (Hooks::g_bEspNames.load()) {
-                    const char* name = reinterpret_cast<const char*>(controller + 
-                                     cs2_dumper::schemas::client_dll::CBasePlayerController::m_iszPlayerName);
-                    if (name && name[0] && name[0] > 0x20 && name[0] < 0x7F) {
-                        ImVec2 tsz = ImGui::CalcTextSize(name);
+                    char nameBuf[128] = { 0 };
+                    if (SafeReadString(controller + 
+                                     cs2_dumper::schemas::client_dll::CBasePlayerController::m_iszPlayerName,
+                                     nameBuf, sizeof(nameBuf)) &&
+                        nameBuf[0] > 0x20 && nameBuf[0] < 0x7F) {
+                        ImVec2 tsz = ImGui::CalcTextSize(nameBuf);
                         float nx = headScreenPos.x - tsz.x / 2;
                         float ny = y1 - tsz.y - 3;
-                        dl->AddText(ImVec2(nx + 1, ny + 1), IM_COL32(0, 0, 0, 200), name);
-                        dl->AddText(ImVec2(nx, ny), IM_COL32(255, 255, 255, 255), name);
+                        dl->AddText(ImVec2(nx + 1, ny + 1), IM_COL32(0, 0, 0, 200), nameBuf);
+                        dl->AddText(ImVec2(nx, ny), IM_COL32(255, 255, 255, 255), nameBuf);
                     }
                 }
 

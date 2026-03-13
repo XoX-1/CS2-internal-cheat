@@ -8,8 +8,6 @@
 #include "../features/bhop.hpp"
 #include "../features/killsound.hpp"
 #include "../features/keybind_manager.hpp"
-// #include "../features/inventory_changer.hpp"
-// #include "../features/texture_manager.hpp"
 #include <iostream>
 #include <cmath>
 
@@ -68,7 +66,7 @@ namespace DX11Hook {
     #include "../src/fonts/fa_solid_900.h"
 
     static float g_animTime = 0.0f;
-    static float g_tabAnim[5] = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f }; // 5 tabs (no SKINS)
+    static float g_tabAnim[5] = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f };
     static float g_bgParticlePhase = 0.0f;
 
     // Premium Cyberpunk-Purple Color Palette
@@ -461,17 +459,17 @@ namespace DX11Hook {
         dl->AddRect(sidebarStart, sidebarEnd, IM_COL32(60, 45, 100, 80), 16.0f, ImDrawFlags_RoundCornersBottomLeft, 1.0f);
 
         // Sidebar Tabs
-        const char* tabLabels[] = { "LEGIT", "ESP", "VISUALS", "MISC", "KILL SOUND" };
-        const char* tabIcons[] = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS, ICON_FA_MUSIC };
+        const char* tabLabels[] = { "LEGIT", "ESP", "VISUALS", "MISC", "KILL SOUND", "SKINS" };
+        const char* tabIcons[] = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS, ICON_FA_MUSIC, ICON_FA_SHIRT };
         float tabH = 50.0f;
         float tabStartY = contentY + 15.0f;
         float tabAreaHeight = (winSize.y - 28.0f) - tabStartY - 10.0f;
-        float requiredHeight = 5.0f * tabH;
+        float requiredHeight = 6.0f * tabH;
         if (requiredHeight > tabAreaHeight && tabAreaHeight > 120.0f) {
-            tabH = tabAreaHeight / 5.0f;
+            tabH = tabAreaHeight / 6.0f;
         }
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             ImVec2 tabStart = ImVec2(winPos.x + 8, winPos.y + tabStartY + i * tabH);
             ImVec2 tabEnd = ImVec2(tabStart.x + sidebarWidth - 16, tabStart.y + tabH);
 
@@ -829,6 +827,11 @@ namespace DX11Hook {
                 KillSound::BrowseAndAddFiles(g_hWnd);
             }
         }
+        // ============ TAB 5: SKINS (Inventory Changer) ============
+        else if (activeTab == 5) {
+            ImGui::TextWrapped("Coming Soon...");
+        }
+
         ImGui::EndChild();
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(2);
@@ -934,8 +937,8 @@ namespace DX11Hook {
     }
 
     // =====================================================================
-    // DX11 Hook — Present / ResizeBuffers / Init / Shutdown
-    // =====================================================================
+    // Flag to skip rendering during ResizeBuffers (prevents crash on mid-transition Present)
+    bool g_bResizing = false;
 
     HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags) {
         if (!g_bInitialized) {
@@ -977,35 +980,40 @@ namespace DX11Hook {
                 ApplyCustomStyle();
                 ImGui_ImplWin32_Init(g_hWnd);
                 ImGui_ImplDX11_Init(g_pDevice, g_pContext);
-                // TextureMgr::Init(g_pDevice);
 
                 g_bInitialized = true;
             }
         }
 
-        if (g_bInitialized && g_pRenderTargetView) {
-            ImGui_ImplDX11_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
+        // Skip rendering entirely during ResizeBuffers — the back buffer is invalid
+        if (g_bResizing || !g_bInitialized || !g_pRenderTargetView) {
+            return oPresent(pSwapChain, SyncInterval, Flags);
+        }
 
-            ImGuiIO& io2 = ImGui::GetIO();
-            Aimbot::UpdateScreenSize((int)io2.DisplaySize.x, (int)io2.DisplaySize.y);
+        ImGui_ImplDX11_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
 
-            // Show main menu directly (startup screen disabled)
-            if (g_bMenuOpen) {
-                RenderMenu();
-            }
+        ImGuiIO& io2 = ImGui::GetIO();
+        Aimbot::UpdateScreenSize((int)io2.DisplaySize.x, (int)io2.DisplaySize.y);
 
-            // Only render ESP, Radar, and SpectatorList when game is in a valid state
-            // This prevents crashes during level transitions and loading screens
+        // Show main menu directly (startup screen disabled)
+        if (g_bMenuOpen) {
+            RenderMenu();
+        }
+
+        // Only render ESP, Radar, and SpectatorList when game is in a valid state.
+        // Guard with SEH to prevent a transition-time memory fault from crashing the game.
+        __try {
             if (Hooks::IsGameReady()) {
                 if (Hooks::g_bAimbotEnabled.load()) {
                     Aimbot::Run();
                 }
 
-                // Run bhop in render thread for maximum responsiveness
+                // Bhop stamina/velocity patching only (game thread).
+                // The actual jump logic runs in the main cheat thread for consistent timing.
                 if (Hooks::g_bBhopEnabled.load()) {
-                    Bunnyhop::Run();
+                    Bunnyhop::RunGameThread();
                 }
 
                 if (Hooks::g_bEspEnabled) {
@@ -1020,16 +1028,28 @@ namespace DX11Hook {
                     SpectatorList::Render();
                 }
             }
-
-            ImGui::Render();
-            g_pContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
-            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            // Recover this frame; next frame will re-evaluate game readiness.
         }
+
+        ImGui::Render();
+        g_pContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
         return oPresent(pSwapChain, SyncInterval, Flags);
     }
 
     HRESULT __stdcall hkResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
+        // Block Present from rendering while we're rebuilding the pipeline
+        g_bResizing = true;
+
+        // Invalidate ImGui's internal DX11 objects (font texture, blend state, shaders, etc.)
+        // before releasing the render target. Without this, ImGui_ImplDX11_RenderDrawData
+        // will crash on the next Present call because it holds stale pipeline references.
+        if (g_bInitialized) {
+            ImGui_ImplDX11_InvalidateDeviceObjects();
+        }
+
         if (g_pRenderTargetView) {
             g_pRenderTargetView->Release();
             g_pRenderTargetView = nullptr;
@@ -1043,6 +1063,13 @@ namespace DX11Hook {
             g_pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
             pBackBuffer->Release();
         }
+
+        // Recreate ImGui's device objects for the new pipeline state
+        if (g_bInitialized) {
+            ImGui_ImplDX11_CreateDeviceObjects();
+        }
+
+        g_bResizing = false;
 
         return hr;
     }
@@ -1097,7 +1124,6 @@ namespace DX11Hook {
         }
 
         if (g_bInitialized) {
-            // TextureMgr::Shutdown();
             ImGui_ImplDX11_Shutdown();
             ImGui_ImplWin32_Shutdown();
             ImGui::DestroyContext();

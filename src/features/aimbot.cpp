@@ -1,4 +1,4 @@
-﻿#include "aimbot.hpp"
+#include "aimbot.hpp"
 #include "../hooks/hooks.hpp"
 #include "../sdk/memory.hpp"
 #include "../sdk/constants.hpp"
@@ -35,7 +35,34 @@ namespace Aimbot {
 
     static uintptr_t g_lockedPawn = 0;
     static int g_targetSwitchCooldown = 0; // Frames to wait before switching targets
-    static ULONGLONG g_lastAimTick = 0;
+
+    // High-precision timer using QueryPerformanceCounter (sub-microsecond)
+    // GetTickCount64 has ~15ms resolution which is too coarse for frame-accurate
+    // aim at 130+ FPS (7.7ms/frame), causing quantized zero-delta frames and jitter.
+    static LARGE_INTEGER g_lastAimQPC = {};
+    static LARGE_INTEGER g_qpcFrequency = {};
+    static bool g_qpcInitialized = false;
+
+    static float GetHighPrecisionDeltaTime() {
+        if (!g_qpcInitialized) {
+            QueryPerformanceFrequency(&g_qpcFrequency);
+            QueryPerformanceCounter(&g_lastAimQPC);
+            g_qpcInitialized = true;
+            return 0.0001f; // First frame fallback
+        }
+
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+
+        float dt = static_cast<float>(now.QuadPart - g_lastAimQPC.QuadPart)
+                 / static_cast<float>(g_qpcFrequency.QuadPart);
+        g_lastAimQPC = now;
+
+        // Clamp to sane range: 0.1ms min (10000 FPS), 100ms max (10 FPS)
+        if (dt < 0.0001f) dt = 0.0001f;
+        if (dt > 0.1f) dt = 0.1f;
+        return dt;
+    }
 
     // Cache screen dimensions from render thread (updated by ESP::Render via ImGui)
     // Aimbot thread should NOT call ImGui::GetIO() - it's not thread safe.
@@ -73,7 +100,7 @@ namespace Aimbot {
             // Only aim while AIMBOT key is held
             if (!KeybindManager::IsAimbotKeyPressed()) {
                 g_lockedPawn = 0;
-                g_lastAimTick = 0;
+                g_qpcInitialized = false;
                 return;
             }
 
@@ -110,8 +137,9 @@ namespace Aimbot {
             // Vector3 aimPunch;
             // Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_CSPlayerPawn::m_aimPunchAngle, aimPunch);
 
-            view_matrix_t viewMatrix;
-            memcpy(&viewMatrix, reinterpret_cast<void*>(clientBase + cs2_dumper::offsets::client_dll::dwViewMatrix), sizeof(view_matrix_t));
+            view_matrix_t viewMatrix{};
+            if (!Memory::SafeReadBytes(clientBase + cs2_dumper::offsets::client_dll::dwViewMatrix,
+                           &viewMatrix, sizeof(viewMatrix))) return;
 
             int screenWidth = s_screenWidth;
             int screenHeight = s_screenHeight;
@@ -247,41 +275,59 @@ namespace Aimbot {
 
             // Apply aim
             if (foundTarget) {
-                // Fast smoothing with low-FPS compensation (keeps old responsive feel)
                 bestTargetAngle.Clamp();
                 float smooth = Hooks::g_fAimbotSmooth.load();
-                ULONGLONG nowTick = GetTickCount64();
-                if (g_lastAimTick == 0) g_lastAimTick = nowTick;
-                float dt = static_cast<float>(nowTick - g_lastAimTick) / 1000.0f;
-                g_lastAimTick = nowTick;
-                if (dt < 0.001f) dt = 0.001f;
-                if (dt > 0.100f) dt = 0.100f;
-                
-                // Preserve previous fast behavior and scale by frame time (60 FPS baseline)
-                if (smooth >= 1.0f) {
-                    QAngle delta = bestTargetAngle - currentAngles;
-                    delta.Clamp();
-                    
-                    float smoothFactor = (smooth - 1.0f) * 0.3f + 1.2f;
-                    
-                    if (GetAsyncKeyState(0x01) & 0x8000) {
-                        smoothFactor = 1.2f;
+
+                // High-precision delta time via QueryPerformanceCounter
+                float dt = GetHighPrecisionDeltaTime();
+
+                QAngle delta = bestTargetAngle - currentAngles;
+                delta.Clamp();
+
+                // Angular deadzone — suppress micro-jitter when nearly on target
+                float deltaMag = sqrtf(delta.x * delta.x + delta.y * delta.y);
+                if (deltaMag < 0.01f) {
+                    // Already on target, skip this frame
+                } else if (smooth <= 1.0f) {
+                    // No smoothing — snap to target
+                    currentAngles = bestTargetAngle;
+                    currentAngles.Clamp();
+                    Memory::SafeWrite(clientBase + cs2_dumper::offsets::client_dll::dwViewAngles, currentAngles);
+                } else {
+                    // FPS-independent exponential smoothing with sub-stepping.
+                    // At low FPS, dt is large, making 1-e^(-speed*dt) approach 1.0
+                    // which causes overshooting/snappy aim. Sub-stepping breaks the
+                    // large dt into multiple small steps (≤2ms each), ensuring smooth
+                    // convergence regardless of frame rate.
+                    //
+                    // speed = 60/smooth: smooth=2 → speed=30 (fast), smooth=50 → speed=1.2 (slow)
+                    float speed = 60.0f / smooth;
+
+                    // Sub-step: break dt into steps of max 2ms (500Hz virtual rate)
+                    constexpr float MAX_STEP = 0.002f;
+                    float remaining = dt;
+
+                    while (remaining > 0.0001f) {
+                        float step = (remaining > MAX_STEP) ? MAX_STEP : remaining;
+                        remaining -= step;
+
+                        float t = 1.0f - expf(-speed * step);
+                        if (t > 1.0f) t = 1.0f;
+
+                        // Recompute delta each sub-step for proper convergence
+                        QAngle subDelta = bestTargetAngle - currentAngles;
+                        subDelta.Clamp();
+
+                        currentAngles.x += subDelta.x * t;
+                        currentAngles.y += subDelta.y * t;
+                        currentAngles.Clamp();
                     }
 
-                    float frameComp = dt / (1.0f / 60.0f);
-                    if (frameComp < 0.5f) frameComp = 0.5f;
-                    if (frameComp > 3.0f) frameComp = 3.0f;
-                    
-                    currentAngles.x += (delta.x / smoothFactor) * frameComp;
-                    currentAngles.y += (delta.y / smoothFactor) * frameComp;
-                } else {
-                    currentAngles = bestTargetAngle;
+                    Memory::SafeWrite(clientBase + cs2_dumper::offsets::client_dll::dwViewAngles, currentAngles);
                 }
-
-                currentAngles.Clamp();
-                Memory::SafeWrite(clientBase + cs2_dumper::offsets::client_dll::dwViewAngles, currentAngles);
             } else {
-                g_lastAimTick = 0;
+                // Reset QPC timer when no target so first frame after acquire is clean
+                g_qpcInitialized = false;
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             // Silently recover from any access violation
@@ -293,7 +339,7 @@ namespace Aimbot {
         // Clear locked target on match transition
         g_lockedPawn = 0;
         g_targetSwitchCooldown = 0;
-        g_lastAimTick = 0;
+        g_qpcInitialized = false;
     }
 
 } // namespace Aimbot
