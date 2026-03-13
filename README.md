@@ -56,9 +56,10 @@ cmake --build build --config Release
 ```
 
 The output DLL will be at `build/Release/mindcheat.dll`.
+The Injector output will be at `build/Release/mindcheat_injector.exe`.
 
 ### Injection
-Use any DLL injector to load `mindcheat.dll` into `cs2.exe`. Press **INSERT** to toggle the menu.
+Use the mindcheat_injector.exe to load `mindcheat.dll` into `cs2.exe`. Press F1 in the lobby then press **INSERT** to toggle the menu.
 
 ---
 
@@ -79,14 +80,9 @@ output/          — Auto-generated offset dumps
 If your new dumps are written directly into this project's `output/` folder, just run:
 
 ```cmd
-py scripts\update_offsets.py
+update_offsets.exe
 ```
 
-If your dump is in another folder, pass that path:
-
-```cmd
-py scripts\update_offsets.py "C:\path\to\new\output"
-```
 
 This script will:
 - Replace project `output/` with the new dump
@@ -94,14 +90,6 @@ This script will:
 - Refresh `sdk/client_dll.hpp` from `output/client_dll.hpp`
 
 If your path is a parent folder that contains `output/`, the script detects it automatically.
-
-Optional auto mode (keeps watching for changes and re-syncs automatically):
-
-```cmd
-py scripts\update_offsets.py --watch
-```
-
----
 
 ## Disclaimer
 
