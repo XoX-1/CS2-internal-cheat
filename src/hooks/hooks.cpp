@@ -9,7 +9,6 @@
 #include "../features/bhop.hpp"
 #include "../features/noflash.hpp"
 #include "../features/nosmoke.hpp"
-#include "../features/glow.hpp"
 #include "../features/killsound.hpp"
 #include "../features/triggerbot.hpp"
 #include "../features/keybind_manager.hpp"
