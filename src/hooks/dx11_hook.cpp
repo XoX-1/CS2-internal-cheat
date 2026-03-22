@@ -658,8 +658,8 @@ namespace DX11Hook {
                     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION " Conflict: Same key as Aimbot!");
                 }
                 
-                ImGui::Separator();
-                ImGui::SliderInt("Burst", (int*)&Hooks::g_nTriggerbotBurst, -1, 10);
+
+
             }
         }
         // ============ TAB 1: ESP ============

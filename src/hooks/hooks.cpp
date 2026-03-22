@@ -46,7 +46,7 @@ namespace Hooks {
     std::atomic<int> g_nAimbotBone{6}; // Head
     std::atomic<bool> g_bFFAEnabled{false};
 
-    std::atomic<int> g_nTriggerbotBurst{-1};
+
 
     std::atomic<bool> g_bFovChangerEnabled{false};
     std::atomic<float> g_fPlayerFov{90.0f}; // Default CS2 FOV

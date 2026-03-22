@@ -25,10 +25,7 @@ namespace {
     // =========================================================================
     static bool g_consoleInit = false;
     static void EnsureConsole() {
-        if (g_consoleInit) return;
-        AllocConsole();
-        freopen("CONOUT$", "w", stdout);
-        g_consoleInit = true;
+        // Debug console disabled
     }
 
     // =========================================================================

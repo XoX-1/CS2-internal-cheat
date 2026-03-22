@@ -44,7 +44,7 @@ namespace Hooks {
     extern std::atomic<bool> g_bFFAEnabled; // Free-For-All mode for Deathmatch
 
     // Triggerbot settings
-    extern std::atomic<int> g_nTriggerbotBurst;
+
 
     // Player FOV settings
     extern std::atomic<bool> g_bFovChangerEnabled;
