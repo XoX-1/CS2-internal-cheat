@@ -1,3 +1,5 @@
+##DO NOT BUY THIS CHEAT FROM OTHERS. THIS IS THE REAL ONE THAT CREAT AND FULLY OPEN SOURCE DO NOT FALL FOR SCAMS.
+
 # MindCheat — CS2 Internal Cheat
 
 A feature-rich internal cheat for Counter-Strike 2, built as a DLL that is injected into the game process. Uses ImGui with DirectX 11 for the overlay UI.
