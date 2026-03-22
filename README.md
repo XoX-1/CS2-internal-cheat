@@ -73,7 +73,7 @@ Before you start, make sure you have:
 1. Launch **Counter-Strike 2**.
 2. Run the provided `mindcheat_injector.exe` as Administrator (this will automatically inject the DLL into the game).
    *(Alternatively, use your own preferred DLL injector to load `mindcheat.dll` into `cs2.exe`)*
-3. Once injected, press the **INSERT** key on your keyboard to open or close the cheat menu!
+3. Once injected, press **F1** in the lobby, then press the **INSERT** key on your keyboard to open or close the cheat menu!
 
 ---
 
