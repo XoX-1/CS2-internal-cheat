@@ -18,9 +18,16 @@ namespace PlayerFov {
             uintptr_t clientBase = Memory::GetModuleBase("client.dll");
             if (!clientBase) return;
 
-            uintptr_t localPawn = 0;
-            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn) || 
-                !Memory::IsValidPtr(localPawn)) return;
+            uintptr_t entityList = 0;
+            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) ||
+                !Memory::IsValidPtr(entityList)) return;
+
+            uintptr_t localController = 0;
+            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
+                !Memory::IsValidPtr(localController)) return;
+
+            uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
+            if (!localPawn) return;
 
             // CS2 handles FOV in the CameraServices component of the Pawn
             uintptr_t cameraServices = 0;

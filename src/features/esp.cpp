@@ -175,9 +175,24 @@ namespace ESP {
         if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) || 
             !Memory::IsValidPtr(entityList)) return;
 
+        // Resolve local pawn via Controller → EntityList (reliable path)
+        uintptr_t localController = 0;
+        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
+            !Memory::IsValidPtr(localController)) return;
+
+        uint32_t localPawnHandle = 0;
+        if (!Memory::SafeRead(localController + cs2_dumper::schemas::client_dll::CBasePlayerController::m_hPawn, localPawnHandle) ||
+            !localPawnHandle) return;
+
+        uintptr_t localPawnEntry = 0;
+        if (!Memory::SafeRead(entityList + Constants::EntityList::OFFSET_BASE +
+            sizeof(uintptr_t) * ((localPawnHandle & Constants::EntityList::HANDLE_MASK) >>
+            Constants::EntityList::ENTRY_SHIFT), localPawnEntry) ||
+            !Memory::IsValidPtr(localPawnEntry)) return;
+
         uintptr_t localPawn = 0;
-        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn) || 
-            !Memory::IsValidPtr(localPawn)) return;
+        if (!Memory::SafeRead(localPawnEntry + Constants::EntityList::ENTRY_SIZE * (localPawnHandle & Constants::EntityList::INDEX_MASK),
+            localPawn) || !Memory::IsValidPtr(localPawn)) return;
 
         uint8_t localTeam = 0;
         Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_iTeamNum, localTeam);

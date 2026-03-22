@@ -44,12 +44,17 @@ namespace Triggerbot {
             uintptr_t clientBase = Memory::GetModuleBase("client.dll");
             if (!clientBase) return;
 
-            // Get local player pawn
-            uintptr_t localPawn = 0;
-            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn) || 
-                !Memory::IsValidPtr(localPawn)) {
-                return;
-            }
+            // Resolve local pawn via Controller → EntityList
+            uintptr_t entityList = 0;
+            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) ||
+                !Memory::IsValidPtr(entityList)) return;
+
+            uintptr_t localController = 0;
+            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
+                !Memory::IsValidPtr(localController)) return;
+
+            uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
+            if (!localPawn) return;
 
             // Check if local player is alive
             int localHealth = 0;
@@ -87,13 +92,6 @@ namespace Triggerbot {
                 s_wasTriggering = false;
             }
             s_lastEntityId = (DWORD)idEntIndex;
-
-            // Get entity list
-            uintptr_t entityList = 0;
-            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) || 
-                !Memory::IsValidPtr(entityList)) {
-                return;
-            }
 
             // Get the entity under crosshair from entity list
             uintptr_t listEntry = 0;

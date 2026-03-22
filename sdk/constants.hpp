@@ -5,6 +5,10 @@
 
 namespace Constants {
 
+    // Module name constants
+    constexpr const char* CLIENT_DLL = "client.dll";
+    constexpr const char* ENGINE2_DLL = "engine2.dll";
+
     // Entity list traversal constants
     namespace EntityList {
         constexpr size_t OFFSET_BASE = 0x10;

@@ -20,12 +20,14 @@ add_library(mindcheat SHARED
     src/features/bhop.cpp
     src/features/noflash.cpp
     src/features/nosmoke.cpp
-    src/features/glow.cpp
     src/features/killsound.cpp
     src/features/spectator_list.cpp
     src/features/triggerbot.cpp
     src/features/radar.cpp
     src/features/keybind_manager.cpp
+    src/features/inventory_changer.cpp
+    src/features/texture_manager.cpp
+    src/features/skychanger.cpp
 
     # ImGui source
     vendor/imgui/imgui.cpp

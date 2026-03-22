@@ -93,6 +93,31 @@ namespace Memory {
         // The next GetModuleBase call will see the stale tick and refresh.
     }
 
+    // Resolve a pawn pointer from a controller via entity list handle resolution.
+    // This is the reliable path (same as ESP/aimbot use for other players).
+    // dwLocalPlayerPawn can return stale addresses; this method avoids that.
+    inline uintptr_t ResolvePawnFromController(uintptr_t entityList, uintptr_t controller, std::ptrdiff_t hPawnOffset = 0x6C4) {
+        if (!IsValidPtr(entityList) || !IsValidPtr(controller)) return 0;
+
+        constexpr size_t EL_OFFSET_BASE = 0x10;
+        constexpr size_t EL_ENTRY_SHIFT = 9;
+        constexpr size_t EL_ENTRY_SIZE  = 0x70;
+        constexpr size_t EL_INDEX_MASK  = 0x1FF;
+        constexpr size_t EL_HANDLE_MASK = 0x7FFF;
+
+        uint32_t pawnHandle = 0;
+        if (!SafeRead(controller + hPawnOffset, pawnHandle) || !pawnHandle) return 0;
+
+        uintptr_t pawnEntry = 0;
+        if (!SafeRead(entityList + EL_OFFSET_BASE +
+            sizeof(uintptr_t) * ((pawnHandle & EL_HANDLE_MASK) >> EL_ENTRY_SHIFT), pawnEntry) ||
+            !IsValidPtr(pawnEntry)) return 0;
+
+        uintptr_t pawn = 0;
+        SafeRead(pawnEntry + EL_ENTRY_SIZE * (pawnHandle & EL_INDEX_MASK), pawn);
+        return IsValidPtr(pawn) ? pawn : 0;
+    }
+
     // Secure memory write that mimics normal access patterns
     // Uses intermediate buffer to avoid direct pointer writes
     template<typename T>

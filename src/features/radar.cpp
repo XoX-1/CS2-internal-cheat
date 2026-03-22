@@ -135,9 +135,12 @@ namespace Radar {
         if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) ||
             !Memory::IsValidPtr(entityList)) return;
 
-        uintptr_t localPawn = 0;
-        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn) ||
-            !Memory::IsValidPtr(localPawn)) return;
+        uintptr_t localController = 0;
+        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
+            !Memory::IsValidPtr(localController)) return;
+
+        uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
+        if (!localPawn) return;
 
         // Get local player team
         uint8_t localTeam = 0;

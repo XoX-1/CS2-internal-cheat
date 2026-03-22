@@ -103,9 +103,12 @@ namespace SpectatorList {
         if (!SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) ||
             !IsValidPtr(entityList)) return;
 
-        uintptr_t localPawn = 0;
-        if (!SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn) ||
-            !IsValidPtr(localPawn)) return;
+        uintptr_t localController = 0;
+        if (!SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
+            !IsValidPtr(localController)) return;
+
+        uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
+        if (!localPawn) return;
 
         char spectatorNames[64][128];
         int spectatorCount = 0;

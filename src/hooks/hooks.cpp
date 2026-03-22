@@ -9,10 +9,11 @@
 #include "../features/bhop.hpp"
 #include "../features/noflash.hpp"
 #include "../features/nosmoke.hpp"
-#include "../features/glow.hpp"
 #include "../features/killsound.hpp"
 #include "../features/triggerbot.hpp"
 #include "../features/keybind_manager.hpp"
+#include "../features/inventory_changer.hpp"
+#include "../features/skychanger.hpp"
 #include <offsets.hpp>
 #include <client_dll.hpp>
 #include <iostream>
@@ -45,8 +46,13 @@ namespace Hooks {
     std::atomic<int> g_nAimbotBone{6}; // Head
     std::atomic<bool> g_bFFAEnabled{false};
 
+    std::atomic<int> g_nTriggerbotBurst{-1};
+
     std::atomic<bool> g_bFovChangerEnabled{false};
     std::atomic<float> g_fPlayerFov{90.0f}; // Default CS2 FOV
+
+    std::atomic<bool> g_bAutoStrafeEnabled(false);
+    std::atomic<bool> g_bAntiFlashEnabled(false);
 
     std::atomic<bool> g_bSpectatorListEnabled{false};
     std::atomic<bool> g_bKillSoundEnabled{false};
@@ -57,6 +63,7 @@ namespace Hooks {
     std::atomic<bool> g_bNoSmokeEnabled{false}; // NoSmoke
 
     std::atomic<bool> g_bInventoryChangerEnabled{false}; // Inventory Changer
+    std::atomic<bool> g_bSkyChangerEnabled{false}; // Sky Changer
 
     std::atomic<bool> g_bGlowEnabled{false}; // Enemy Glow
     std::atomic<bool> g_bGlowTeamEnabled{false}; // Team Glow
@@ -89,6 +96,7 @@ namespace Hooks {
                 Triggerbot::Reset();
                 Bunnyhop::Reset();
                 KillSound::Reset();
+                SkyChanger::Reset();
             }
             
             // Check if game is in a valid state before running features
@@ -106,16 +114,15 @@ namespace Hooks {
                 if (g_bNoSmokeEnabled.load()) {
                     NoSmoke::Run();
                 }
-                if (g_bGlowEnabled.load()) {
-                    Glow::Run();
-                }
                 if (g_bKillSoundEnabled.load()) {
                     KillSound::Run();
                 }
                 if (Triggerbot::g_bEnabled.load()) {
                     Triggerbot::Run();
                 }
-                // Inventory changer was removed from this build.
+                // Sky changer always runs — manages its own state via preset selection
+                // (same pattern as inventory_changer)
+                SkyChanger::Run();
             } else {
                 // Reset features when game is not ready (loading/menu)
                 // This prevents stale pointers when entering new matches
@@ -189,24 +196,27 @@ namespace Hooks {
             return false;
         }
         
-        // Check if we have a valid local player
-        uintptr_t localPawn = 0;
-        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn) || 
-            !Memory::IsValidPtr(localPawn)) {
-            return false;
-        }
-        
-        // Check if local player is valid (has valid health/lifestate pointers would be checked)
-        int health = 0;
-        if (!Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_iHealth, health)) {
-            return false;
-        }
-        
-        // Health can be 0 when dead, but the read should succeed
-        // Additional check: make sure entity list is valid
+        // Check if we have a valid local player via Controller → EntityList resolution
         uintptr_t entityList = 0;
         if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) || 
             !Memory::IsValidPtr(entityList)) {
+            return false;
+        }
+
+        uintptr_t localController = 0;
+        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
+            !Memory::IsValidPtr(localController)) {
+            return false;
+        }
+
+        uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
+        if (!localPawn) {
+            return false;
+        }
+        
+        // Check if local player is valid (health read should succeed)
+        int health = 0;
+        if (!Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_iHealth, health)) {
             return false;
         }
         
@@ -234,10 +244,12 @@ namespace Hooks {
             // Get current state
             uintptr_t clientBase = Memory::GetModuleBase("client.dll");
             uintptr_t entityList = 0;
-            uintptr_t localPawn = 0;
             
             Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList);
-            Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, localPawn);
+
+            uintptr_t localController = 0;
+            Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController);
+            uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
             
             // Check if entity list or local pawn changed (indicates map/match change)
             bool stateChanged = (entityList != s_lastEntityList) || (localPawn != s_lastLocalPawn);
@@ -249,6 +261,7 @@ namespace Hooks {
             
             if (stateChanged) {
                 std::cout << XOR_STR("[+] Game state transition detected - resetting features\n");
+                InventoryUI::ResetRegen();
                 return true;
             }
         }

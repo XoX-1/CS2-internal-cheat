@@ -39,26 +39,41 @@ A feature-rich internal cheat for Counter-Strike 2, built as a DLL that is injec
 
 ---
 
-## Build
+## Build Instructions
 
 ### Prerequisites
-- **Windows 10/11**
-- **Visual Studio 2022** (with C++ Desktop Development workload)
-- **CMake 3.16+**
+Before you start, make sure you have:
+1. **Windows 10/11**
+2. **Visual Studio 2022** installed (ensure you have the "Desktop development with C++" workload checked).
+3. **CMake** installed (version 3.16 or newer).
 
-### Steps
+### Step-by-Step Guide
+1. **Download the Source Code**:
+   Open a terminal (like Command Prompt or PowerShell) and run:
+   ```cmd
+   git clone https://github.com/XoX-1/CS2-internal-cheat.git
+   cd CS2-internal-cheat
+   ```
 
-```cmd
-git clone https://github.com/XoX-1/CS2-internal-cheat.git
-cd CS2-internal-cheat
-cmake -B build
-cmake --build build --config Release
-```
+2. **Generate Build Files**:
+   Tell CMake to prepare the project in a new `build` folder:
+   ```cmd
+   cmake -B build
+   ```
 
-The output DLL will be at `build/Release/mindcheat.dll`.
+3. **Compile the Cheat**:
+   Build the final Release version of the cheat:
+   ```cmd
+   cmake --build build --config Release
+   ```
 
-### Injection
-Use any DLL injector to load `mindcheat.dll` into `cs2.exe`. Press **INSERT** to toggle the menu.
+   Once finished, you will find both the **DLL** (`mindcheat.dll`) and the **Injector** (`mindcheat_injector.exe`) inside the `build/Release/` folder!
+
+### How to Inject (Play)
+1. Launch **Counter-Strike 2**.
+2. Run the provided `mindcheat_injector.exe` as Administrator (this will automatically inject the DLL into the game).
+   *(Alternatively, use your own preferred DLL injector to load `mindcheat.dll` into `cs2.exe`)*
+3. Once injected, press the **INSERT** key on your keyboard to open or close the cheat menu!
 
 ---
 
@@ -79,14 +94,9 @@ output/          — Auto-generated offset dumps
 If your new dumps are written directly into this project's `output/` folder, just run:
 
 ```cmd
-py scripts\update_offsets.py
+update_offsets.exe
 ```
 
-If your dump is in another folder, pass that path:
-
-```cmd
-py scripts\update_offsets.py "C:\path\to\new\output"
-```
 
 This script will:
 - Replace project `output/` with the new dump
@@ -95,13 +105,6 @@ This script will:
 
 If your path is a parent folder that contains `output/`, the script detects it automatically.
 
-Optional auto mode (keeps watching for changes and re-syncs automatically):
-
-```cmd
-py scripts\update_offsets.py --watch
-```
-
----
 
 ## Disclaimer
 

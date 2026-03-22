@@ -43,6 +43,9 @@ namespace Hooks {
     extern std::atomic<int> g_nAimbotBone; // 6=Head, 5=Neck, 4=Chest
     extern std::atomic<bool> g_bFFAEnabled; // Free-For-All mode for Deathmatch
 
+    // Triggerbot settings
+    extern std::atomic<int> g_nTriggerbotBurst;
+
     // Player FOV settings
     extern std::atomic<bool> g_bFovChangerEnabled;
     extern std::atomic<float> g_fPlayerFov;
@@ -77,6 +80,9 @@ namespace Hooks {
 
     // Inventory Changer
     extern std::atomic<bool> g_bInventoryChangerEnabled;
+
+    // Sky Changer
+    extern std::atomic<bool> g_bSkyChangerEnabled;
 
     // Thread control
     extern std::atomic<bool> g_bRunning;

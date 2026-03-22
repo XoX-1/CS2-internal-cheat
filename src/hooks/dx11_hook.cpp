@@ -8,8 +8,10 @@
 #include "../features/bhop.hpp"
 #include "../features/killsound.hpp"
 #include "../features/keybind_manager.hpp"
+#include "../features/inventory_changer.hpp"
+#include "../features/texture_manager.hpp"
+#include "../features/skychanger.hpp"
 #include <iostream>
-#include <cmath>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -66,7 +68,7 @@ namespace DX11Hook {
     #include "../src/fonts/fa_solid_900.h"
 
     static float g_animTime = 0.0f;
-    static float g_tabAnim[5] = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+    static float g_tabAnim[7] = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
     static float g_bgParticlePhase = 0.0f;
 
     // Premium Cyberpunk-Purple Color Palette
@@ -365,7 +367,7 @@ namespace DX11Hook {
         g_bgParticlePhase += ImGui::GetIO().DeltaTime * 0.5f;
 
         static int activeTab = 0;
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 7; i++) {
             float target = (i == activeTab) ? 1.0f : 0.0f;
             g_tabAnim[i] += (target - g_tabAnim[i]) * ImGui::GetIO().DeltaTime * 12.0f;
         }
@@ -459,17 +461,17 @@ namespace DX11Hook {
         dl->AddRect(sidebarStart, sidebarEnd, IM_COL32(60, 45, 100, 80), 16.0f, ImDrawFlags_RoundCornersBottomLeft, 1.0f);
 
         // Sidebar Tabs
-        const char* tabLabels[] = { "LEGIT", "ESP", "VISUALS", "MISC", "KILL SOUND", "SKINS" };
-        const char* tabIcons[] = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS, ICON_FA_MUSIC, ICON_FA_SHIRT };
+        const char* tabLabels[] = { "LEGIT", "ESP", "VISUALS", "MISC", "KILL SOUND", "SKINS", "SKY" };
+        const char* tabIcons[] = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS, ICON_FA_MUSIC, ICON_FA_SHIRT, ICON_FA_CLOUD };
         float tabH = 50.0f;
         float tabStartY = contentY + 15.0f;
         float tabAreaHeight = (winSize.y - 28.0f) - tabStartY - 10.0f;
-        float requiredHeight = 6.0f * tabH;
+        float requiredHeight = 7.0f * tabH;
         if (requiredHeight > tabAreaHeight && tabAreaHeight > 120.0f) {
-            tabH = tabAreaHeight / 6.0f;
+            tabH = tabAreaHeight / 7.0f;
         }
 
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 7; i++) {
             ImVec2 tabStart = ImVec2(winPos.x + 8, winPos.y + tabStartY + i * tabH);
             ImVec2 tabEnd = ImVec2(tabStart.x + sidebarWidth - 16, tabStart.y + tabH);
 
@@ -656,10 +658,8 @@ namespace DX11Hook {
                     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION " Conflict: Same key as Aimbot!");
                 }
                 
-                ImGui::Spacing();
-                ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
-                ImGui::TextWrapped("Burst: -1 = Auto, 0 = Single");
-                ImGui::PopStyleColor();
+                ImGui::Separator();
+                ImGui::SliderInt("Burst", (int*)&Hooks::g_nTriggerbotBurst, -1, 10);
             }
         }
         // ============ TAB 1: ESP ============
@@ -829,7 +829,11 @@ namespace DX11Hook {
         }
         // ============ TAB 5: SKINS (Inventory Changer) ============
         else if (activeTab == 5) {
-            ImGui::TextWrapped("Coming Soon...");
+            InventoryUI::RenderInventoryChangerTab();
+        }
+        // ============ TAB 6: SKY CHANGER ============
+        else if (activeTab == 6) {
+            SkyChanger::RenderSkyChangerTab();
         }
 
         ImGui::EndChild();
@@ -981,6 +985,9 @@ namespace DX11Hook {
                 ImGui_ImplWin32_Init(g_hWnd);
                 ImGui_ImplDX11_Init(g_pDevice, g_pContext);
 
+                // Initialize texture manager for skin previews
+                TextureMgr::Init(g_pDevice);
+
                 g_bInitialized = true;
             }
         }
@@ -988,6 +995,12 @@ namespace DX11Hook {
         // Skip rendering entirely during ResizeBuffers — the back buffer is invalid
         if (g_bResizing || !g_bInitialized || !g_pRenderTargetView) {
             return oPresent(pSwapChain, SyncInterval, Flags);
+        }
+
+        // Run skin changer BEFORE ImGui frame (matches Epstein pattern — critical for regen call)
+        // Only run when game is fully ready to prevent crashes during matchmaking/map transitions
+        if (Hooks::IsGameReady()) {
+            InventoryUI::Run();
         }
 
         ImGui_ImplDX11_NewFrame();
@@ -1027,6 +1040,8 @@ namespace DX11Hook {
                 if (Hooks::g_bSpectatorListEnabled) {
                     SpectatorList::Render();
                 }
+
+                SkyChanger::RenderWeatherOverlay();
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             // Recover this frame; next frame will re-evaluate game readiness.
