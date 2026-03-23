@@ -6,7 +6,6 @@
 #include "../features/aimbot.hpp"
 #include "../features/bhop.hpp"
 #include "../features/player_fov.hpp"
-#include "../features/bhop.hpp"
 #include "../features/noflash.hpp"
 #include "../features/nosmoke.hpp"
 #include "../features/killsound.hpp"
@@ -40,33 +39,28 @@ namespace Hooks {
     float g_fEspEnemyColor[4] = { 1.0f, 0.3f, 0.3f, 1.0f };
     float g_fEspTeamColor[4]  = { 0.3f, 0.5f, 1.0f, 1.0f };
 
+    // Aimbot settings
     std::atomic<bool> g_bAimbotEnabled{false};
     std::atomic<float> g_fAimbotFov{5.0f};
     std::atomic<float> g_fAimbotSmooth{5.0f};
     std::atomic<int> g_nAimbotBone{6}; // Head
     std::atomic<bool> g_bFFAEnabled{false};
 
-
-
+    // Player FOV settings
     std::atomic<bool> g_bFovChangerEnabled{false};
-    std::atomic<float> g_fPlayerFov{90.0f}; // Default CS2 FOV
-
-    std::atomic<bool> g_bAutoStrafeEnabled(false);
-    std::atomic<bool> g_bAntiFlashEnabled(false);
+    std::atomic<float> g_fPlayerFov{90.0f};
 
     std::atomic<bool> g_bSpectatorListEnabled{false};
+    std::atomic<bool> g_bBombTimerEnabled{false};
     std::atomic<bool> g_bKillSoundEnabled{false};
 
-    std::atomic<bool> g_bBhopEnabled{false}; // Bunnyhop
-    
-    std::atomic<bool> g_bNoFlashEnabled{false}; // NoFlash
-    std::atomic<bool> g_bNoSmokeEnabled{false}; // NoSmoke
+    // Visuals extra
+    std::atomic<bool> g_bNoFlashEnabled{false};
+    std::atomic<bool> g_bNoSmokeEnabled{false};
 
-    std::atomic<bool> g_bInventoryChangerEnabled{false}; // Inventory Changer
-    std::atomic<bool> g_bSkyChangerEnabled{false}; // Sky Changer
-
-    std::atomic<bool> g_bGlowEnabled{false}; // Enemy Glow
-    std::atomic<bool> g_bGlowTeamEnabled{false}; // Team Glow
+    // Glow Options
+    std::atomic<bool> g_bGlowEnabled{false};
+    std::atomic<bool> g_bGlowTeamEnabled{false};
     float g_fGlowEnemyColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f }; // Red
     float g_fGlowTeamColor[4] = { 0.0f, 0.5f, 1.0f, 1.0f }; // Blue
 
@@ -82,6 +76,15 @@ namespace Hooks {
     float g_fRadarEnemyColor[4] = { 1.0f, 0.3f, 0.3f, 1.0f }; // Red
     float g_fRadarTeamColor[4]  = { 0.3f, 0.5f, 1.0f, 1.0f }; // Blue
 
+    // Movement settings
+    std::atomic<bool> g_bBhopEnabled{false};
+
+    // Inventory Changer
+    std::atomic<bool> g_bInventoryChangerEnabled{false};
+
+    // Sky Changer
+    std::atomic<bool> g_bSkyChangerEnabled{false};
+
     std::atomic<bool> g_bRunning{true};
     HANDLE g_hMainThread = nullptr;
 
@@ -90,7 +93,6 @@ namespace Hooks {
         
         while (g_bRunning.load()) {
             // Check for game state transitions (map/match changes)
-            // This resets feature states to prevent stale pointer issues
             if (CheckGameStateTransition()) {
                 Aimbot::Reset();
                 Triggerbot::Reset();
@@ -99,8 +101,6 @@ namespace Hooks {
                 SkyChanger::Reset();
             }
             
-            // Check if game is in a valid state before running features
-            // This prevents crashes during level transitions and loading screens
             if (IsGameReady()) {
                 if (g_bFovChangerEnabled.load()) {
                     PlayerFov::Run();
@@ -120,15 +120,11 @@ namespace Hooks {
                 if (Triggerbot::g_bEnabled.load()) {
                     Triggerbot::Run();
                 }
-                // Sky changer always runs — manages its own state via preset selection
-                // (same pattern as inventory_changer)
                 SkyChanger::Run();
             } else {
-                // Reset features when game is not ready (loading/menu)
-                // This prevents stale pointers when entering new matches
                 static int notReadyCounter = 0;
                 notReadyCounter++;
-                if (notReadyCounter > 500) { // Reset every ~500ms when not ready
+                if (notReadyCounter > 500) {
                     Aimbot::Reset();
                     Triggerbot::Reset();
                     KillSound::Reset();
@@ -144,17 +140,12 @@ namespace Hooks {
     }
 
     void Initialize() {
-        // Check for debuggers/analysis tools
         if (AntiDebug::IsBeingDebugged(AntiDebug::CHECK_DEBUGGER_WINDOWS | 
                                         AntiDebug::CHECK_ANALYSIS_TOOLS)) {
-            // In production, you might want to take action here
-            // For now, just log it
             std::cout << XOR_STR("[!] Warning: Analysis tool detected\n");
         }
         
-        // Initialize keybind manager with default keys
         KeybindManager::Initialize();
-        
         MH_Initialize();
         DX11Hook::Initialize();
 
@@ -176,15 +167,12 @@ namespace Hooks {
     }
 
     bool IsGameReady() {
-        // Check if game modules are loaded
         uintptr_t clientBase = Memory::GetModuleBase("client.dll");
         if (!clientBase) return false;
         
         uintptr_t engineBase = Memory::GetModuleBase("engine2.dll");
         if (!engineBase) return false;
 
-        // Check SignOnState — must be SIGNONSTATE_FULL (6) to be in-game.
-        // This drops below 6 BEFORE entities are freed during disconnect.
         uintptr_t networkClient = 0;
         if (!Memory::SafeRead(engineBase + cs2_dumper::offsets::engine2_dll::dwNetworkGameClient, networkClient) ||
             !Memory::IsValidPtr(networkClient)) {
@@ -196,7 +184,6 @@ namespace Hooks {
             return false;
         }
         
-        // Check if we have a valid local player via Controller → EntityList resolution
         uintptr_t entityList = 0;
         if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) || 
             !Memory::IsValidPtr(entityList)) {
@@ -214,7 +201,6 @@ namespace Hooks {
             return false;
         }
         
-        // Check if local player is valid (health read should succeed)
         int health = 0;
         if (!Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_iHealth, health)) {
             return false;
@@ -223,14 +209,12 @@ namespace Hooks {
         return true;
     }
 
-    // Game state tracking for detecting match transitions
     static uintptr_t s_lastEntityList = 0;
     static uintptr_t s_lastLocalPawn = 0;
     static int s_gameStateCheckCounter = 0;
     static bool s_wasGameReady = false;
     
     bool CheckGameStateTransition() {
-        // Only check every 100 frames (~100ms) to avoid overhead
         s_gameStateCheckCounter++;
         if (s_gameStateCheckCounter < Constants::Timing::STATE_CHECK_INTERVAL) {
             return false;
@@ -239,9 +223,7 @@ namespace Hooks {
         
         bool isReady = IsGameReady();
         
-        // If game just became ready after not being ready, we might have transitioned
         if (isReady && !s_wasGameReady) {
-            // Get current state
             uintptr_t clientBase = Memory::GetModuleBase("client.dll");
             uintptr_t entityList = 0;
             
@@ -251,10 +233,8 @@ namespace Hooks {
             Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController);
             uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
             
-            // Check if entity list or local pawn changed (indicates map/match change)
             bool stateChanged = (entityList != s_lastEntityList) || (localPawn != s_lastLocalPawn);
             
-            // Update stored state
             s_lastEntityList = entityList;
             s_lastLocalPawn = localPawn;
             s_wasGameReady = true;

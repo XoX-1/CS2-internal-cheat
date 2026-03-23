@@ -11,6 +11,7 @@
 #include "../features/inventory_changer.hpp"
 #include "../features/texture_manager.hpp"
 #include "../features/skychanger.hpp"
+#include "../features/bomb_timer.hpp"
 #include <iostream>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -772,6 +773,7 @@ namespace DX11Hook {
             
             SectionHeader("INFORMATION");
             ToggleSwitch("Spectator List", &Hooks::g_bSpectatorListEnabled);
+            ToggleSwitch("Bomb Timer", &Hooks::g_bBombTimerEnabled);
 
             ImGui::Columns(1);
         }
@@ -1039,6 +1041,10 @@ namespace DX11Hook {
 
                 if (Hooks::g_bSpectatorListEnabled) {
                     SpectatorList::Render();
+                }
+
+                if (Hooks::g_bBombTimerEnabled) {
+                    BombTimer::Render();
                 }
 
                 SkyChanger::RenderWeatherOverlay();

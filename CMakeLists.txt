@@ -22,6 +22,7 @@ add_library(mindcheat SHARED
     src/features/nosmoke.cpp
     src/features/killsound.cpp
     src/features/spectator_list.cpp
+    src/features/bomb_timer.cpp
     src/features/triggerbot.cpp
     src/features/radar.cpp
     src/features/keybind_manager.cpp

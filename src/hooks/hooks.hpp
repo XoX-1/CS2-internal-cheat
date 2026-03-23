@@ -51,6 +51,7 @@ namespace Hooks {
     extern std::atomic<float> g_fPlayerFov;
 
     extern std::atomic<bool> g_bSpectatorListEnabled;
+    extern std::atomic<bool> g_bBombTimerEnabled;
     extern std::atomic<bool> g_bKillSoundEnabled;
 
     // Visuals extra

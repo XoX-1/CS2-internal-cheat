@@ -1,4 +1,4 @@
-﻿#include "bhop.hpp"
+#include "bhop.hpp"
 #include "../hooks/hooks.hpp"
 #include "../sdk/memory.hpp"
 #include "../sdk/constants.hpp"

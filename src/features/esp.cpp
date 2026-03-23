@@ -168,6 +168,8 @@ static const BoneConnection kSkeleton[] = {
 
 namespace ESP {
     void Render() {
+        if (!Hooks::IsGameReady()) return; // Prevent crashes during loading/disconnect
+
         uintptr_t clientBase = Memory::GetModuleBase("client.dll");
         if (!clientBase) return;
 
