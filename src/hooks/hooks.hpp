@@ -57,6 +57,7 @@ namespace Hooks {
     // Visuals extra
     extern std::atomic<bool> g_bNoFlashEnabled;
     extern std::atomic<bool> g_bNoSmokeEnabled;
+    extern std::atomic<bool> g_bThirdPersonEnabled;
 
     // Glow Options
     extern std::atomic<bool> g_bGlowEnabled;
@@ -84,6 +85,9 @@ namespace Hooks {
 
     // Sky Changer
     extern std::atomic<bool> g_bSkyChangerEnabled;
+
+    // Silent Aim
+    extern std::atomic<bool> g_bSilentAimEnabled;
 
     // Thread control
     extern std::atomic<bool> g_bRunning;

@@ -21,11 +21,9 @@
 namespace {
 
     // =========================================================================
-    // Debug Console (matches Epstein pattern)
     // =========================================================================
     static bool g_consoleInit = false;
     static void EnsureConsole() {
-        // Debug console disabled
     }
 
     // =========================================================================
@@ -60,42 +58,74 @@ namespace {
     }
 
     // =========================================================================
-    // Entity Offsets (from dumped schemas — values match Epstein hardcoded)
+    // Entity Offsets (from dumped schemas + guide reference)
     // =========================================================================
     namespace Off {
         using namespace cs2_dumper::schemas::client_dll;
 
+        // Attribute Container
         constexpr uintptr_t m_AttributeManager = C_EconEntity::m_AttributeManager;
         constexpr uintptr_t m_Item             = C_AttributeContainer::m_Item;
 
-        constexpr uintptr_t m_iItemDefinitionIndex = C_EconItemView::m_iItemDefinitionIndex;
-        constexpr uintptr_t m_iItemIDHigh          = C_EconItemView::m_iItemIDHigh;
-        constexpr uintptr_t m_iItemIDLow           = C_EconItemView::m_iItemIDLow;
-        constexpr uintptr_t m_iAccountID           = C_EconItemView::m_iAccountID;
-        constexpr uintptr_t m_iEntityQuality       = C_EconItemView::m_iEntityQuality;
-        constexpr uintptr_t m_bInitialized         = C_EconItemView::m_bInitialized;
+        // CEconItemView fields (from guide: 0x1BA, 0x1BC, etc.)
+        constexpr uintptr_t m_iItemDefinitionIndex = C_EconItemView::m_iItemDefinitionIndex;  // 0x1BA
+        constexpr uintptr_t m_iEntityQuality       = C_EconItemView::m_iEntityQuality;        // 0x1BC
+        constexpr uintptr_t m_iEntityLevel         = C_EconItemView::m_iEntityLevel;          // 0x1C0
+        constexpr uintptr_t m_iItemID              = C_EconItemView::m_iItemID;               // 0x1C8
+        constexpr uintptr_t m_iItemIDHigh          = C_EconItemView::m_iItemIDHigh;           // 0x1D0
+        constexpr uintptr_t m_iItemIDLow           = C_EconItemView::m_iItemIDLow;            // 0x1D4
+        constexpr uintptr_t m_iAccountID           = C_EconItemView::m_iAccountID;            // 0x1D8
+        constexpr uintptr_t m_iInventoryPosition   = 0x1DC;  // Not in dumper, from guide
+        constexpr uintptr_t m_iEntityQuantity      = 0x1EC;  // From guide
+        constexpr uintptr_t m_bDisallowSOC         = C_EconItemView::m_bDisallowSOC;          // 0x1E9
+        constexpr uintptr_t m_bInitialized         = C_EconItemView::m_bInitialized;          // 0x1E8
 
+        // Override fields (from guide)
+        constexpr uintptr_t m_iRarityOverride    = 0x1F0;
+        constexpr uintptr_t m_iQualityOverride   = 0x1F4;
+        constexpr uintptr_t m_iOriginOverride    = 0x1F8;
+        constexpr uintptr_t m_ubStyleOverride    = 0x1FC;
+        constexpr uintptr_t m_unClientFlags      = 0x1FD;
+
+        // Fallback values (legacy skin changer)
         constexpr uintptr_t m_nFallbackPaintKit  = C_EconEntity::m_nFallbackPaintKit;
         constexpr uintptr_t m_nFallbackSeed      = C_EconEntity::m_nFallbackSeed;
         constexpr uintptr_t m_flFallbackWear     = C_EconEntity::m_flFallbackWear;
         constexpr uintptr_t m_nFallbackStatTrak  = C_EconEntity::m_nFallbackStatTrak;
 
+        // Weapon services
         constexpr uintptr_t m_pWeaponServices = C_BasePlayerPawn::m_pWeaponServices;
-
         constexpr uintptr_t m_hMyWeapons   = CPlayer_WeaponServices::m_hMyWeapons;
         constexpr uintptr_t m_hActiveWeapon = CPlayer_WeaponServices::m_hActiveWeapon;
+        constexpr uintptr_t m_pClippingWeapon = C_CSPlayerPawn::m_pClippingWeapon;
 
+        // Attributes
         constexpr uintptr_t m_AttributeList = C_EconItemView::m_AttributeList;
         constexpr uintptr_t m_Attributes    = CAttributeList::m_Attributes;
 
-        constexpr uintptr_t m_pClippingWeapon = C_CSPlayerPawn::m_pClippingWeapon;
-
-        constexpr uintptr_t m_szCustomName = C_EconItemView::m_szCustomName; // char[161]
+        // Custom name (from guide: 0x2F8)
+        constexpr uintptr_t m_szCustomName = C_EconItemView::m_szCustomName;          // char[161]
         constexpr uintptr_t m_szCustomNameOverride = C_EconItemView::m_szCustomNameOverride; // char[161]
 
-        constexpr uintptr_t m_bNeedToReApplyGloves = C_CSPlayerPawn::m_bNeedToReApplyGloves;
-        constexpr uintptr_t m_EconGloves           = C_CSPlayerPawn::m_EconGloves;
         constexpr uintptr_t m_hMyWearables         = C_BaseCombatCharacter::m_hMyWearables;
+
+        // CCSPlayerController -> Inventory Services (from guide: 0x810)
+        constexpr uintptr_t m_pInventoryServices = 0x810;  // CCSPlayerController -> CCSPlayerControllerInventoryServices*
+
+        // CCSPlayerControllerInventoryServices (from guide: 0x40)
+        constexpr uintptr_t m_vecNetworkableLoadout = 0x40;  // CUtlVector<NetworkedLoadoutSlot_t>
+
+        // NetworkedLoadoutSlot_t layout (from guide: total 0x474 bytes)
+        // +0x000 : CEconItemView (embedded)
+        // +0x470 : uint16 team
+        // +0x472 : uint16 slot
+        constexpr uintptr_t LOADOUT_TEAM_OFFSET   = 0x470;
+        constexpr uintptr_t LOADOUT_SLOT_OFFSET   = 0x472;
+        constexpr uintptr_t LOADOUT_SLOT_SIZE     = 0x474;  // CEconItemView(0x470) + team(2) + slot(2)
+
+        // CCSWeaponBase cosmetic refresh (from guide)
+        constexpr uintptr_t m_bVisualsDataSet = 0x1AA1;
+        constexpr uintptr_t m_bUIWeapon       = 0x1AA2;
     }
 
     // =========================================================================
@@ -119,7 +149,6 @@ namespace {
     static uintptr_t lastAppliedWeapon = 0;
     static int lastAppliedKit = 0;
 
-    // Debug counters (matching Epstein)
     static int applyCount = 0;
     static int ticksSinceApply = 0;
 
@@ -161,6 +190,184 @@ namespace {
         return attr;
     }
 
+    // Forward declarations for functions used by new inventory changer code
+    static void CreateAttributes(uintptr_t item, int paintKit, int seed, float wear);
+    static void RemoveAttributes(uintptr_t item);
+    static void ClearHudName(uintptr_t item);
+
+    // =========================================================================
+    // FillEconItemView — fills CEconItemView with proper fields per guide
+    // =========================================================================
+    static void FillEconItemView(uintptr_t itemPtr, uint16_t defIndex, uint32_t accountID, 
+                                  uint8_t quality = 4, uint8_t level = 1) {
+        if (!itemPtr) return;
+
+        // Generate unique item ID (guide uses 0xF000000000000001ULL pattern)
+        static uint64_t nextItemID = 0xF000000000000001ULL;
+        uint64_t itemID = nextItemID++;
+
+        // Fill all CEconItemView fields per guide
+        GameWrite<uint16_t>(itemPtr + Off::m_iItemDefinitionIndex, defIndex);
+        GameWrite<int32_t>(itemPtr + Off::m_iEntityQuality, quality);      // 4 = Unique
+        GameWrite<uint32_t>(itemPtr + Off::m_iEntityLevel, level);         // 1 = normal level
+        GameWrite<uint64_t>(itemPtr + Off::m_iItemID, itemID);
+        GameWrite<uint32_t>(itemPtr + Off::m_iItemIDHigh, static_cast<uint32_t>(itemID >> 32));
+        GameWrite<uint32_t>(itemPtr + Off::m_iItemIDLow, static_cast<uint32_t>(itemID));
+        GameWrite<uint32_t>(itemPtr + Off::m_iAccountID, accountID);
+        GameWrite<uint32_t>(itemPtr + Off::m_iInventoryPosition, 0);       // position in inventory
+        GameWrite<int32_t>(itemPtr + Off::m_iEntityQuantity, 1);           // quantity = 1
+        GameWrite<bool>(itemPtr + Off::m_bDisallowSOC, false);             // allow SOC
+        
+        // Write m_bInitialized LAST per guide best practice
+        GameWrite<bool>(itemPtr + Off::m_bInitialized, true);
+    }
+
+    // =========================================================================
+    // ClearEconItemView — resets CEconItemView to default state
+    // =========================================================================
+    static void ClearEconItemView(uintptr_t itemPtr) {
+        if (!itemPtr) return;
+
+        GameWrite<bool>(itemPtr + Off::m_bInitialized, false);  // Clear initialized first
+        GameWrite<uint16_t>(itemPtr + Off::m_iItemDefinitionIndex, 0);
+        GameWrite<int32_t>(itemPtr + Off::m_iEntityQuality, 0);
+        GameWrite<uint32_t>(itemPtr + Off::m_iEntityLevel, 0);
+        GameWrite<uint64_t>(itemPtr + Off::m_iItemID, 0);
+        GameWrite<uint32_t>(itemPtr + Off::m_iItemIDHigh, 0);
+        GameWrite<uint32_t>(itemPtr + Off::m_iItemIDLow, 0);
+        GameWrite<uint32_t>(itemPtr + Off::m_iAccountID, 0);
+        GameWrite<uint32_t>(itemPtr + Off::m_iInventoryPosition, 0);
+        GameWrite<int32_t>(itemPtr + Off::m_iEntityQuantity, 0);
+        
+        // Clear custom name
+        ClearHudName(itemPtr);
+        
+        // Clear attributes
+        RemoveAttributes(itemPtr);
+    }
+
+    // =========================================================================
+    // GetLocalAccountID — resolves account ID from local player
+    // =========================================================================
+    static uint32_t GetLocalAccountID(uintptr_t clientBase) {
+        uintptr_t localController = 0;
+        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
+            !Memory::IsValidPtr(localController)) {
+            return 0;
+        }
+
+        // Read account ID from controller
+        uint32_t accountID = 0;
+        Memory::SafeRead(localController + cs2_dumper::schemas::client_dll::CBasePlayerController::m_steamID, accountID);
+        
+        return accountID;
+    }
+
+    // =========================================================================
+    // GetInventoryServices — resolves CCSPlayerControllerInventoryServices*
+    // =========================================================================
+    static uintptr_t GetInventoryServices(uintptr_t clientBase) {
+        uintptr_t localController = 0;
+        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
+            !Memory::IsValidPtr(localController)) {
+            return 0;
+        }
+
+        // Read m_pInventoryServices pointer (offset 0x810 per guide)
+        uintptr_t invServices = 0;
+        Memory::SafeRead(localController + Off::m_pInventoryServices, invServices);
+        
+        return invServices;
+    }
+
+    // =========================================================================
+    // WriteToLoadout — writes item to m_vecNetworkableLoadout per guide
+    // =========================================================================
+    static bool WriteToLoadout(uintptr_t invServices, uintptr_t itemPtr, uint16_t team, uint16_t loadoutSlot) {
+        if (!invServices || !itemPtr) return false;
+
+        // Get the loadout vector base
+        uintptr_t vecBase = invServices + Off::m_vecNetworkableLoadout;
+        
+        // Read vector data
+        uintptr_t dataPtr = GameRead<uintptr_t>(vecBase + 0x0);  // m_pMemory
+        int size = GameRead<int>(vecBase + 0x10);                // m_Size
+        
+        if (!dataPtr || size <= 0) {
+            printf("[LOADOUT] Vector empty or invalid: dataPtr=0x%llX size=%d\n", dataPtr, size);
+            return false;
+        }
+
+        // CRASH FIX: Bounds check loadoutSlot against actual vector size before writing
+        if ((int)loadoutSlot >= size) {
+            printf("[LOADOUT] Slot %d out of bounds (vector size=%d) — skipping\n", loadoutSlot, size);
+            return false;
+        }
+
+        // Calculate slot address: dataPtr + (slotIndex * LOADOUT_SLOT_SIZE)
+        uintptr_t slotPtr = dataPtr + (loadoutSlot * Off::LOADOUT_SLOT_SIZE);
+        
+        // Copy CEconItemView data from itemPtr to slotPtr (embedded at +0x000)
+        // We write the key fields that need to be in the loadout
+        uint16_t defIndex = GameRead<uint16_t>(itemPtr + Off::m_iItemDefinitionIndex);
+        int32_t quality = GameRead<int32_t>(itemPtr + Off::m_iEntityQuality);
+        uint32_t level = GameRead<uint32_t>(itemPtr + Off::m_iEntityLevel);
+        uint64_t itemID = GameRead<uint64_t>(itemPtr + Off::m_iItemID);
+        uint32_t itemIDHigh = GameRead<uint32_t>(itemPtr + Off::m_iItemIDHigh);
+        uint32_t itemIDLow = GameRead<uint32_t>(itemPtr + Off::m_iItemIDLow);
+        uint32_t accountID = GameRead<uint32_t>(itemPtr + Off::m_iAccountID);
+        uint32_t invPos = GameRead<uint32_t>(itemPtr + Off::m_iInventoryPosition);
+        int32_t quantity = GameRead<int32_t>(itemPtr + Off::m_iEntityQuantity);
+        bool initialized = GameRead<bool>(itemPtr + Off::m_bInitialized);
+
+        // Write to loadout slot
+        GameWrite<uint16_t>(slotPtr + Off::m_iItemDefinitionIndex, defIndex);
+        GameWrite<int32_t>(slotPtr + Off::m_iEntityQuality, quality);
+        GameWrite<uint32_t>(slotPtr + Off::m_iEntityLevel, level);
+        GameWrite<uint64_t>(slotPtr + Off::m_iItemID, itemID);
+        GameWrite<uint32_t>(slotPtr + Off::m_iItemIDHigh, itemIDHigh);
+        GameWrite<uint32_t>(slotPtr + Off::m_iItemIDLow, itemIDLow);
+        GameWrite<uint32_t>(slotPtr + Off::m_iAccountID, accountID);
+        GameWrite<uint32_t>(slotPtr + Off::m_iInventoryPosition, invPos);
+        GameWrite<int32_t>(slotPtr + Off::m_iEntityQuantity, quantity);
+        GameWrite<bool>(slotPtr + Off::m_bDisallowSOC, false);
+        GameWrite<bool>(slotPtr + Off::m_bInitialized, initialized);
+
+        // Write team and slot metadata (per guide: +0x470 and +0x472)
+        GameWrite<uint16_t>(slotPtr + Off::LOADOUT_TEAM_OFFSET, team);
+        GameWrite<uint16_t>(slotPtr + Off::LOADOUT_SLOT_OFFSET, loadoutSlot);
+
+        printf("[LOADOUT] Wrote item def=%d to slot %d team=%d\n", defIndex, loadoutSlot, team);
+        return true;
+    }
+
+    // =========================================================================
+    // ApplyWeaponCosmetic — writes cosmetic to weapon's CAttributeContainer::m_Item
+    // =========================================================================
+    static void ApplyWeaponCosmetic(uintptr_t weapon, uint16_t defIndex, int paintKit, float wear, int seed) {
+        if (!weapon) return;
+
+        // Get weapon's item view via CAttributeContainer::m_Item (offset 0x50 per guide)
+        uintptr_t weaponItem = weapon + Off::m_AttributeManager + Off::m_Item;
+        
+        uint32_t accountID = 0;
+        uintptr_t clientBase = Memory::GetModuleBase("client.dll");
+        if (clientBase) {
+            accountID = GetLocalAccountID(clientBase);
+        }
+
+        // Fill the weapon's CEconItemView
+        FillEconItemView(weaponItem, defIndex, accountID, 4, 1);
+        
+        // Apply attributes
+        CreateAttributes(weaponItem, paintKit, seed, wear);
+        
+        // Force visual refresh per guide: clear m_bVisualsDataSet
+        GameWrite<bool>(weapon + Off::m_bVisualsDataSet, false);
+        
+        printf("[WEAPON_COSMETIC] Applied kit=%d to weapon=0x%llX\n", paintKit, weapon);
+    }
+
     // Static attribute buffer — allocated ONCE, reused every apply (exact Epstein)
     static CEconItemAttribute* g_attrBuffer = nullptr;
 
@@ -168,11 +375,6 @@ namespace {
     static uintptr_t regenAddr = 0;
     static bool regenPatched = false;
 
-    // Weapon constants
-    enum WeaponDefIndex : uint16_t {
-        WEAPON_KNIFE_CT = 42,
-        WEAPON_KNIFE_T = 59,
-    };
 
     // =========================================================================
     // SigScan — exact clone of Epstein Game::SigScan
@@ -252,7 +454,26 @@ namespace {
     // InitRegen — exact Epstein clone
     // =========================================================================
     static void ResetRegenState() {
-        regenAddr = 0;
+        // Restore patched bytes BEFORE zeroing regenAddr.
+        // Leaving the patch live when the game disconnects/reloads can corrupt
+        // a different code path if CS2 re-maps client.dll to the same VA.
+        if (regenAddr && regenPatched) {
+            // Guard: during warmup-end / map reload client.dll may be
+            // mid-rebuild. IsBadWritePtr prevents VirtualProtect from
+            // crashing on a stale / partially unmapped address.
+            void* patchSite = reinterpret_cast<void*>(regenAddr + 0x52);
+            if (!IsBadWritePtr(patchSite, 2)) {
+                DWORD oldProtect = 0;
+                if (VirtualProtect(patchSite, 2, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+                    *reinterpret_cast<uint16_t*>(patchSite) = 0x0000;
+                    VirtualProtect(patchSite, 2, oldProtect, &oldProtect);
+                    printf("[SKIN] Regen patch restored at 0x%llX\n", regenAddr);
+                }
+            } else {
+                printf("[SKIN] Regen patch addr 0x%llX invalid (map reload) — skipping restore\n", regenAddr);
+            }
+        }
+        regenAddr    = 0;
         regenPatched = false;
     }
 
@@ -309,17 +530,20 @@ namespace {
     }
 
     // =========================================================================
-    // ApplyAndRegen — exact Epstein clone
-    // =========================================================================
     static void ApplyAndRegen(uintptr_t weapon, const SkinConfig& skin, uint16_t defIndex) {
         uintptr_t item = weapon + Off::m_AttributeManager + Off::m_Item;
 
         printf("[SKIN] === APPLY START === weapon=0x%llX def=%d kit=%d\n", weapon, defIndex, skin.paintKit);
 
-        // Save original values so we can restore
+        // Save original ItemIDHigh
         uint32_t origItemIDHigh = GameRead<uint32_t>(item + Off::m_iItemIDHigh);
 
+        // Force the game to use fallback values
         GameWrite<uint32_t>(item + Off::m_iItemIDHigh, 0xFFFFFFFF);
+
+        // NEVER write m_iItemDefinitionIndex — CS2's animation dictionary crashes
+        // if the bone structure doesn't match the original weapon entity skeleton.
+        // We ONLY apply paintKit/wear/seed to the existing weapon entity.
 
         GameWrite<int32_t>(weapon + Off::m_nFallbackPaintKit, skin.paintKit);
         GameWrite<float>(weapon + Off::m_flFallbackWear, skin.wear);
@@ -332,13 +556,10 @@ namespace {
         // Remove attributes after regen (buffer stays allocated)
         RemoveAttributes(item);
 
-        // Full reset — make weapon look untouched
+        // Restore ItemIDHigh
         GameWrite<uint32_t>(item + Off::m_iItemIDHigh, origItemIDHigh);
-        GameWrite<int32_t>(weapon + Off::m_nFallbackPaintKit, 0);
-        GameWrite<float>(weapon + Off::m_flFallbackWear, 0.0f);
-        GameWrite<int32_t>(weapon + Off::m_nFallbackSeed, 0);
-        GameWrite<int32_t>(weapon + Off::m_nFallbackStatTrak, -1);
-        printf("[SKIN] === APPLY DONE (weapon reset to clean state) ===\n");
+
+        printf("[SKIN] === APPLY DONE ===\n");
     }
 
     // =========================================================================
@@ -413,6 +634,32 @@ namespace {
 // =========================================================================
 namespace InventoryUI {
 
+    // Expose internal functions via wrapper functions
+    void FillEconItemView(uintptr_t itemPtr, uint16_t defIndex, uint32_t accountID, 
+                          uint8_t quality, uint8_t level) {
+        ::FillEconItemView(itemPtr, defIndex, accountID, quality, level);
+    }
+
+    void ClearEconItemView(uintptr_t itemPtr) {
+        ::ClearEconItemView(itemPtr);
+    }
+
+    void ApplyWeaponCosmetic(uintptr_t weapon, uint16_t defIndex, int paintKit, float wear, int seed) {
+        ::ApplyWeaponCosmetic(weapon, defIndex, paintKit, wear, seed);
+    }
+
+    bool WriteToLoadout(uintptr_t invServices, uintptr_t itemPtr, uint16_t team, uint16_t loadoutSlot) {
+        return ::WriteToLoadout(invServices, itemPtr, team, loadoutSlot);
+    }
+
+    uintptr_t GetInventoryServices(uintptr_t clientBase) {
+        return ::GetInventoryServices(clientBase);
+    }
+
+    uint32_t GetLocalAccountID(uintptr_t clientBase) {
+        return ::GetLocalAccountID(clientBase);
+    }
+
     // =========================================================================
     // TickInner — exact clone of Epstein SkinChanger::TickInner
     // =========================================================================
@@ -473,13 +720,14 @@ namespace InventoryUI {
             return;
         }
 
+
         InitRegen();
 
         bool force = forceUpdate.load();
 
         std::lock_guard<std::mutex> lock(configMutex);
 
-        // ===== WEAPON SKINS (guns only, no knives/gloves) =====
+        // ===== WEAPON SKINS =====
         uintptr_t activeWeapon = 0;
         Memory::SafeRead(localPawn + Off::m_pClippingWeapon, activeWeapon);
         if (activeWeapon && Memory::IsValidPtr(activeWeapon)) {
@@ -487,9 +735,12 @@ namespace InventoryUI {
             uint16_t defIndex = 0;
             Memory::SafeRead(item + Off::m_iItemDefinitionIndex, defIndex);
 
-            // Only process actual guns (defIndex 1-69, skip knife 31)
-            bool isWeapon = (defIndex > 0 && defIndex < 70);
-            if (isWeapon && defIndex != 31 && defIndex != WEAPON_KNIFE_CT && defIndex != WEAPON_KNIFE_T) {
+            bool isWeapon = false;
+
+            // Handle normal weapons
+            isWeapon = (defIndex > 0 && defIndex < 70 && defIndex != 31);
+
+            if (isWeapon) {
                 auto it = weaponSkins.find(defIndex);
                 if (it != weaponSkins.end() && it->second.enabled && it->second.paintKit > 0) {
                     const SkinConfig& skin = it->second;
@@ -544,18 +795,45 @@ namespace InventoryUI {
         printf("[SKIN] Regen state reset (map/game transition)\n");
     }
 
-    std::vector<std::string> GetInventoryDebugLines() {
-        std::vector<std::string> lines;
-        lines.push_back(std::string("mode: weapon_skin_changer"));
-        lines.push_back(std::string("frames_applied: ") + std::to_string(g_framesApplied));
-        lines.push_back(std::string("weapons_patched: ") + std::to_string(g_weaponsPatched));
-        lines.push_back(std::string("last_error: ") + g_lastError);
-        lines.push_back(std::string("regen_addr: ") + (regenAddr ? "found" : "not_found"));
-        lines.push_back(std::string("regen_patched: ") + (regenPatched ? "yes" : "no"));
-        { std::lock_guard<std::mutex> lock(configMutex); lines.push_back(std::string("active_configs: ") + std::to_string(weaponSkins.size())); }
-        lines.push_back(std::string("status: ") + g_statusMessage);
-        lines.push_back(std::string("hud_name: ") + g_lastHudName);
-        return lines;
+    // =========================================================================
+    // Config persistence — GetAllSkinConfigs / SetAllSkinConfigs
+    // =========================================================================
+    std::vector<SkinEntry> GetAllSkinConfigs() {
+        std::lock_guard<std::mutex> lock(configMutex);
+        std::vector<SkinEntry> out;
+        out.reserve(weaponSkins.size());
+        for (const auto& kv : weaponSkins) {
+            if (!kv.second.enabled) continue;
+            SkinEntry e;
+            e.defIndex = kv.first;
+            e.paintKit = kv.second.paintKit;
+            e.wear     = kv.second.wear;
+            e.seed     = kv.second.seed;
+            e.statTrak = kv.second.statTrak;
+            e.enabled  = true;
+            out.push_back(e);
+        }
+        return out;
+    }
+
+    void SetAllSkinConfigs(const std::vector<SkinEntry>& entries) {
+        std::lock_guard<std::mutex> lock(configMutex);
+        weaponSkins.clear();
+        for (const auto& e : entries) {
+            if (!e.enabled || e.defIndex <= 0 || e.paintKit <= 0) continue;
+            SkinConfig cfg;
+            cfg.paintKit = e.paintKit;
+            cfg.wear     = e.wear;
+            cfg.seed     = e.seed;
+            cfg.statTrak = e.statTrak;
+            cfg.enabled  = true;
+            weaponSkins[e.defIndex] = cfg;
+        }
+        // Reset tracking so everything gets re-applied on the next tick
+        lastAppliedWeapon = 0;
+        lastAppliedKit    = 0;
+        forceUpdate.store(true);
+        printf("[SKIN] Loaded %zu skin configs from config file\n", entries.size());
     }
 
     // =========================================================================
@@ -741,9 +1019,6 @@ namespace InventoryUI {
         // ---- Category tab bar (always visible at top) ----
         if (ImGui::BeginTabBar("##SkinCategories")) {
             for (int c = 0; c < static_cast<int>(SkinDB::CAT_COUNT); c++) {
-                // Skip knives and gloves
-                if (c == static_cast<int>(SkinDB::CAT_KNIVES) || c == static_cast<int>(SkinDB::CAT_GLOVES))
-                    continue;
                 int activeCount = 0;
                 for (int w = 0; w < SkinDB::WEAPON_COUNT; w++) {
                     if (SkinDB::g_weapons[w].category == c && HasActiveSkin(SkinDB::g_weapons[w].defIndex))
@@ -766,14 +1041,14 @@ namespace InventoryUI {
                     ImGui::EndTabItem();
                 }
             }
+
             ImGui::EndTabBar();
         }
 
         ImGui::Spacing();
 
-        // ---- Back button when viewing skins ----
+        // ---- Back button when viewing skins (non-knife categories) ----
         if (g_selectedWeaponIdx >= 0) {
-            // Find weapon name for breadcrumb
             int wIdx = 0;
             const char* weaponName = "";
             for (int wi = 0; wi < SkinDB::WEAPON_COUNT; wi++) {
@@ -788,7 +1063,7 @@ namespace InventoryUI {
 
             if (ImGui::Button("<< Back to Weapons")) {
                 g_selectedWeaponIdx = -1;
-                return; // Don't render stale content this frame
+                return;
             }
             ImGui::SameLine();
             ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.9f, 1.0f), "%s", weaponName);
@@ -819,7 +1094,6 @@ namespace InventoryUI {
                 const char* previewUrl = GetWeaponCardImageUrl(wd);
                 ImVec4 rarityCol = GetRarityColor(SkinDB::RARITY_CONSUMER);
 
-                // Subtitle
                 char subtitle[64];
                 if (hasActive) {
                     std::string activeName = GetActiveSkinName(wd.defIndex);
@@ -835,7 +1109,6 @@ namespace InventoryUI {
                     g_selectedWeaponIdx = wIdx;
                 }
 
-                // Tooltip
                 if (ImGui::IsItemHovered()) {
                     if (hasActive) {
                         std::string activeName = GetActiveSkinName(wd.defIndex);
@@ -870,7 +1143,6 @@ namespace InventoryUI {
             if (realWeaponIndex >= 0) {
                 const auto& weapon = SkinDB::g_weapons[realWeaponIndex];
 
-                // Current active config
                 int activePaintKit = 0;
                 {
                     std::lock_guard<std::mutex> lock(configMutex);
@@ -879,7 +1151,6 @@ namespace InventoryUI {
                         activePaintKit = it->second.paintKit;
                 }
 
-                // Remove skin button
                 if (activePaintKit > 0) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.60f, 0.18f, 0.18f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.80f, 0.25f, 0.25f, 1.0f));
@@ -894,7 +1165,6 @@ namespace InventoryUI {
                     ImGui::PopStyleColor(3);
                 }
 
-                // Wear / Seed / StatTrak controls
                 ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.4f);
                 ImGui::SliderFloat("Wear", &g_editWear, 0.000001f, 1.0f, "%.6f");
                 ImGui::SameLine();
@@ -909,7 +1179,6 @@ namespace InventoryUI {
                 ImGui::Separator();
                 ImGui::Spacing();
 
-                // Skin cards
                 float regionW = ImGui::GetContentRegionAvail().x;
                 int cols = (int)(regionW / (CARD_W + CARD_PAD));
                 if (cols < 1) cols = 1;
@@ -922,10 +1191,14 @@ namespace InventoryUI {
                     ImGui::PushID(s);
                     if (s % cols != 0) ImGui::SameLine(0, CARD_PAD);
 
+                    const char* skinImg = skin.imageUrl;
+                    if (!skinImg || skinImg[0] == '\0') {
+                        skinImg = GetWeaponCardImageUrl(weapon);
+                    }
+
                     if (DrawCard(skin.name,
                                  skin.hasStatTrak ? "StatTrak" : "",
-                                 skin.imageUrl, nullptr, rarityCol, isActive)) {
-                        // Apply this skin (matching Epstein SkinConfig)
+                                 skinImg, nullptr, rarityCol, isActive)) {
                         SkinConfig cfg;
                         cfg.paintKit = skin.paintKit;
                         cfg.wear = g_editWear;
@@ -937,7 +1210,6 @@ namespace InventoryUI {
                         g_statusMessage = std::string("Applied ") + skin.name + " to " + weapon.name;
                     }
 
-                    // Tooltip
                     if (ImGui::IsItemHovered()) {
                         ImGui::SetTooltip("%s\n%s%s", skin.name,
                                           SkinDB::g_rarityColors[skin.rarity].name,

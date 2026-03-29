@@ -11,13 +11,11 @@ namespace SkinDB {
         CAT_RIFLES,
         CAT_SMGS,
         CAT_HEAVY,
-        CAT_KNIVES,
-        CAT_GLOVES,
         CAT_COUNT
     };
 
     inline const char* g_categoryNames[CAT_COUNT] = {
-        "Pistols", "Rifles", "SMGs", "Heavy", "Knives", "Gloves"
+        "Pistols", "Rifles", "SMGs", "Heavy"
     };
 
     // =====================================================================
@@ -1627,6 +1625,10 @@ namespace SkinDB {
     };
 
     // =====================================================================
+    // =====================================================================
+    // Universal Knives
+    // =====================================================================
+
     // Weapon table
     // =====================================================================
     #define SKIN_ARRAY(arr) arr, (int)(sizeof(arr)/sizeof(arr[0]))
@@ -1674,6 +1676,7 @@ namespace SkinDB {
         { 29, "Sawed-Off", CAT_HEAVY, SKIN_ARRAY(g_sawoff_skins) },
         { 25, "XM1014", CAT_HEAVY, SKIN_ARRAY(g_xm1014_skins) },
 
+        // Knives
     };
     inline constexpr int WEAPON_COUNT = sizeof(g_weapons) / sizeof(g_weapons[0]);
 

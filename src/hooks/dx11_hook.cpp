@@ -12,6 +12,10 @@
 #include "../features/texture_manager.hpp"
 #include "../features/skychanger.hpp"
 #include "../features/bomb_timer.hpp"
+#include "../features/silent_aim.hpp"
+#include "../features/bullet_tracer.hpp"
+#include "../features/config_manager.hpp"
+
 #include <iostream>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -69,7 +73,7 @@ namespace DX11Hook {
     #include "../src/fonts/fa_solid_900.h"
 
     static float g_animTime = 0.0f;
-    static float g_tabAnim[7] = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+    static float g_tabAnim[8] = { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
     static float g_bgParticlePhase = 0.0f;
 
     // Premium Cyberpunk-Purple Color Palette
@@ -107,7 +111,6 @@ namespace DX11Hook {
         if (pressed) *v = !*v;
 
         float t = *v ? 1.0f : 0.0f;
-        // Make the switch background slightly lighter when off so it's less harsh
         ImU32 bgCol = *v ? ToU32(kAccent) : IM_COL32(45, 45, 55, 255);
 
         dl->AddRectFilled(p, ImVec2(p.x + width, p.y + height), bgCol, height * 0.5f);
@@ -148,7 +151,7 @@ namespace DX11Hook {
         ImGui::Text("%s", label);
         ImGui::PopStyleColor();
         ImGui::Spacing();
-        ImGui::Spacing(); // extra padding under header
+        ImGui::Spacing();
     }
 
     // Styled slider for regular float
@@ -203,7 +206,6 @@ namespace DX11Hook {
         std::string keyName = KeybindManager::GetKeyName(*keyCode);
         std::string buttonText = isListening ? "Press any key..." : keyName;
         
-        // Style based on state
         if (isListening) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.60f, 0.35f, 0.95f, 1.00f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.45f, 1.00f, 1.00f));
@@ -225,7 +227,7 @@ namespace DX11Hook {
     }
 
     // =====================================================================
-    // RenderStartupScreen — Animated startup with big "Mindcheat" title
+    // RenderStartupScreen
     // =====================================================================
     
     void RenderStartupScreen() {
@@ -234,7 +236,6 @@ namespace DX11Hook {
         static float buttonAnim = 0.0f;
         static bool buttonHovered = false;
         
-        // Center the window
         ImGuiIO& io = ImGui::GetIO();
         ImVec2 center(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
         
@@ -253,27 +254,22 @@ namespace DX11Hook {
         ImVec2 winPos = ImGui::GetWindowPos();
         ImVec2 winSize = ImGui::GetWindowSize();
         
-        // Animated background gradient
         float gradientPhase = g_animTime * 0.3f;
         ImVec2 mousePos = io.MousePos;
         
-        // Background glow effect
         ImVec2 glowCenter = ImVec2(winPos.x + winSize.x * 0.5f, winPos.y + winSize.y * 0.3f);
         float glowRadius = 250.0f + sinf(g_animTime * 0.8f) * 30.0f;
         dl->AddCircleFilled(glowCenter, glowRadius, IM_COL32(80, 50, 150, 30), 64);
         dl->AddCircleFilled(glowCenter, glowRadius * 0.6f, IM_COL32(100, 60, 180, 40), 64);
         
-        // Big animated title
         float titleScale = 1.0f + sinf(g_animTime * 2.0f) * 0.03f;
         
-        // Title shadow
         ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 120 * titleScale, 60));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.1f, 0.08f, 0.15f, 1.0f));
         ImGui::SetWindowFontScale(3.0f * titleScale);
         ImGui::Text("MINDCHEAT");
         ImGui::PopStyleColor();
         
-        // Main title
         ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 122 * titleScale, 58));
         ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
         ImGui::SetWindowFontScale(3.0f * titleScale);
@@ -281,37 +277,30 @@ namespace DX11Hook {
         ImGui::PopStyleColor();
         ImGui::SetWindowFontScale(1.0f);
         
-        // Subtitle
         ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 50, 115));
         ImGui::PushStyleColor(ImGuiCol_Text, kTextDim);
         ImGui::Text("Premium CS2 Cheat");
         ImGui::PopStyleColor();
         
-        // Animated line under title
         float lineWidth = 200.0f + sinf(g_animTime * 1.5f) * 30.0f;
         float lineX = winSize.x * 0.5f - lineWidth * 0.5f;
         dl->AddLine(ImVec2(lineX, 145), ImVec2(lineX + lineWidth, 145), 
                    IM_COL32(112, 80, 219, 150), 2.0f);
         
-        // Version info
         ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 25, 160));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.4f, 0.45f, 1.0f));
         ImGui::Text("v1.0");
         ImGui::PopStyleColor();
         
-        // Animated Start Button - Using ImGui Button for reliability
         float buttonWidth = 200.0f;
         float buttonHeight = 55.0f;
         
-        // Center the button
         ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - buttonWidth * 0.5f, winSize.y - 120.0f));
         
-        // Style the button
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 15.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20, 15));
         
-        // Animated button colors
-        float pulse = (sinf(g_animTime * 3.0f) + 1.0f) * 0.5f; // 0 to 1
+        float pulse = (sinf(g_animTime * 3.0f) + 1.0f) * 0.5f;
         ImVec4 buttonColor = ImVec4(0.35f + pulse * 0.1f, 0.25f + pulse * 0.08f, 0.55f + pulse * 0.12f, 1.0f);
         ImVec4 buttonHover = ImVec4(0.50f, 0.35f, 0.80f, 1.0f);
         ImVec4 buttonActive = ImVec4(0.60f, 0.45f, 0.90f, 1.0f);
@@ -321,7 +310,6 @@ namespace DX11Hook {
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonActive);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
         
-        // Big bold START button - use window font scale
         ImGui::SetWindowFontScale(1.5f);
         
         if (ImGui::Button("START", ImVec2(buttonWidth, buttonHeight))) {
@@ -331,11 +319,9 @@ namespace DX11Hook {
         
         ImGui::SetWindowFontScale(1.0f);
         
-        // Pop styles
         ImGui::PopStyleColor(4);
         ImGui::PopStyleVar(2);
         
-        // Add glow effect around button
         ImVec2 buttonMin = ImGui::GetItemRectMin();
         ImVec2 buttonMax = ImGui::GetItemRectMax();
         bool isHovered = ImGui::IsItemHovered();
@@ -348,7 +334,6 @@ namespace DX11Hook {
                        15.0f, ImDrawFlags_RoundCornersAll, 6.0f);
         }
         
-        // Footer hint
         ImGui::SetCursorPos(ImVec2(winSize.x * 0.5f - 60, winSize.y - 30));
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.35f, 0.4f, 1.0f));
         ImGui::Text("Press INSERT to toggle");
@@ -368,7 +353,7 @@ namespace DX11Hook {
         g_bgParticlePhase += ImGui::GetIO().DeltaTime * 0.5f;
 
         static int activeTab = 0;
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 8; i++) {
             float target = (i == activeTab) ? 1.0f : 0.0f;
             g_tabAnim[i] += (target - g_tabAnim[i]) * ImGui::GetIO().DeltaTime * 12.0f;
         }
@@ -387,7 +372,6 @@ namespace DX11Hook {
         ImVec2 winSize = ImGui::GetWindowSize();
 
         // ============ BACKGROUND PARTICLE EFFECTS ============
-        // Animated gradient orbs in background (softer, no hard edges)
         float time = g_animTime;
         for (int i = 0; i < 3; i++) {
             float phase = time * 0.2f + i * 2.0f;
@@ -395,7 +379,6 @@ namespace DX11Hook {
             float y = winPos.y + winSize.y * (0.4f + 0.3f * sinf(phase * 0.3f + i));
             float radius = 120.0f + 30.0f * sinf(phase);
             int alpha = (int)(8 + 6 * sinf(phase * 1.5f));
-            // Softer gradient with more segments
             dl->AddCircleFilled(ImVec2(x, y), radius, IM_COL32(90, 55, 160, alpha), 64);
         }
 
@@ -403,7 +386,6 @@ namespace DX11Hook {
         float headerH = 70.0f;
         ImVec2 headerEnd = ImVec2(winPos.x + winSize.x, winPos.y + headerH);
 
-        // Header with glassmorphism effect
         dl->AddRectFilled(winPos, headerEnd, IM_COL32(12, 10, 18, 240), 16.0f, ImDrawFlags_RoundCornersTop);
         dl->AddRectFilled(winPos, ImVec2(winPos.x + winSize.x, winPos.y + headerH * 0.7f), 
                          IM_COL32(20, 16, 30, 180), 16.0f, ImDrawFlags_RoundCornersTop);
@@ -411,28 +393,20 @@ namespace DX11Hook {
         // Animated accent line with glow
         float pulseW = 180.0f + sinf(g_animTime * 2.0f) * 50.0f;
         float pulseX = winPos.x + (winSize.x - pulseW) * 0.5f + sinf(g_animTime * 0.6f) * 60.0f;
-        
-        // Outer glow
         dl->AddRectFilled(ImVec2(pulseX - 30, headerEnd.y - 8), ImVec2(pulseX + pulseW + 30, headerEnd.y + 6),
                           IM_COL32(140, 90, 240, 30), 4.0f);
-        // Middle glow
         dl->AddRectFilled(ImVec2(pulseX - 15, headerEnd.y - 4), ImVec2(pulseX + pulseW + 15, headerEnd.y + 2),
                           IM_COL32(160, 100, 255, 60), 2.0f);
-        // Core line
         dl->AddRectFilled(ImVec2(pulseX, headerEnd.y - 2), ImVec2(pulseX + pulseW, headerEnd.y),
                           ToU32(kAccent), 1.0f);
 
-        // Title with glow effect
+        // Title
         ImGui::SetCursorPos(ImVec2(28, 22));
         ImGui::SetWindowFontScale(1.15f);
-        
-        // Title glow shadow
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(kAccent.x, kAccent.y, kAccent.z, 0.3f));
         ImGui::SetCursorPos(ImVec2(30, 24));
         ImGui::Text(ICON_FA_SHIELD_HALVED " MINDCHEAT");
         ImGui::PopStyleColor();
-        
-        // Main title
         ImGui::SetCursorPos(ImVec2(28, 22));
         ImGui::PushStyleColor(ImGuiCol_Text, kAccent);
         ImGui::Text(ICON_FA_SHIELD_HALVED " MIND");
@@ -443,12 +417,207 @@ namespace DX11Hook {
         ImGui::PopStyleColor();
         ImGui::SetWindowFontScale(1.0f);
 
-        // Version badge
-        ImGui::SameLine(winSize.x - 100);
-        ImGui::SetCursorPosY(24);
-        ImGui::PushStyleColor(ImGuiCol_Text, kAccentDim);
-        ImGui::Text("v1.0");
-        ImGui::PopStyleColor();
+        // ============================================================
+        // CONFIG WIDGET — top-right header
+        // ============================================================
+        {
+            static bool  s_renameMode  = false;
+            static int   s_renameIdx   = -1;
+            static char  s_renameBuf[128] = {};
+            static bool  s_modifiedList   = false;
+
+            s_modifiedList = false;
+
+            const auto& cfgList = ConfigManager::GetConfigs();
+            int& cfgSel         = ConfigManager::g_nSelectedConfig;
+
+            // Layout sizes
+            const float comboW  = 155.0f;
+            const float btnW    = 58.0f;
+            const float sp      = 6.0f;
+            const float totalW  = comboW + (btnW + sp) * 2.0f;
+            const float startX  = winSize.x - totalW - 14.0f;
+            const float startY  = 20.0f;
+            const float rowH    = 26.0f;
+
+            ImGui::SetCursorPos(ImVec2(startX, startY));
+
+            // -- Combo --
+            ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(0.10f,0.08f,0.16f,0.88f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.18f,0.13f,0.28f,1.00f));
+            ImGui::PushStyleColor(ImGuiCol_PopupBg,        ImVec4(0.07f,0.06f,0.11f,0.98f));
+            ImGui::PushStyleColor(ImGuiCol_Text,           kTextBright);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 4));
+            ImGui::SetNextItemWidth(comboW);
+
+            const char* cfgPreview = (cfgSel >= 0 && cfgSel < (int)cfgList.size())
+                                     ? cfgList[cfgSel].name.c_str()
+                                     : "-- config --";
+
+            if (ImGui::BeginCombo("##hdr_cfg", cfgPreview, ImGuiComboFlags_HeightLargest)) {
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
+
+                // Existing configs list
+                for (int i = 0; i < (int)cfgList.size(); i++) {
+                    bool isSel = (cfgSel == i);
+                    ImGui::PushID(i);
+
+                    // Inline rename mode
+                    if (s_renameMode && s_renameIdx == i) {
+                        ImGui::SetNextItemWidth(comboW - 68.0f);
+                        bool enter = ImGui::InputText("##rnm", s_renameBuf,
+                                                      IM_ARRAYSIZE(s_renameBuf),
+                                                      ImGuiInputTextFlags_EnterReturnsTrue);
+                        ImGui::SameLine(0, 4);
+                        ImGui::PushStyleColor(ImGuiCol_Button, kAccent);
+                        bool ok = ImGui::SmallButton("OK");
+                        ImGui::PopStyleColor();
+                        ImGui::SameLine(0, 4);
+                        bool cancel = ImGui::SmallButton("X");
+                        if ((enter || ok) && strlen(s_renameBuf) > 0) {
+                            ConfigManager::Rename(cfgList[i].name, std::string(s_renameBuf));
+                            s_renameMode   = false;
+                            s_renameIdx    = -1;
+                            s_modifiedList = true;
+                            ImGui::PopID();
+                            break;
+                        }
+                        if (cancel) {
+                            s_renameMode = false;
+                            s_renameIdx  = -1;
+                        }
+                        ImGui::PopID();
+                        continue;
+                    }
+
+                    // Selectable config name (double-click to rename)
+                    // AllowOverlap is critical: lets the pen/trash buttons on the same row receive clicks
+                    if (ImGui::Selectable(cfgList[i].name.c_str(), isSel,
+                                         ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_AllowOverlap)) {
+                        cfgSel = i;
+                        if (ImGui::IsMouseDoubleClicked(0)) {
+                            s_renameMode = true;
+                            s_renameIdx  = i;
+                            strncpy_s(s_renameBuf, cfgList[i].name.c_str(), 127);
+                        }
+                    }
+                    if (isSel) ImGui::SetItemDefaultFocus();
+
+                    // ---- Tiny icon buttons: override FramePadding locally ----
+                    const float iconBtnSz = ImGui::GetTextLineHeight() + 4.0f;
+
+                    ImGui::SameLine(0, 6);
+                    // Rename button (purple tint)
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,  ImVec2(2.0f, 1.0f));
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+                    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.22f, 0.14f, 0.42f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.38f, 0.24f, 0.68f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  kAccent);
+                    char rnId[32]; snprintf(rnId, sizeof(rnId), ICON_FA_PEN "##rn%d", i);
+                    bool doRename = ImGui::Button(rnId, ImVec2(iconBtnSz, iconBtnSz));
+                    ImGui::PopStyleColor(3);
+                    ImGui::PopStyleVar(2);
+
+                    ImGui::SameLine(0, 3);
+                    // Delete button (red tint)
+                    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,  ImVec2(2.0f, 1.0f));
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+                    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.42f, 0.10f, 0.10f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.72f, 0.16f, 0.16f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.90f, 0.20f, 0.20f, 1.0f));
+                    char delId[32]; snprintf(delId, sizeof(delId), ICON_FA_TRASH "##del%d", i);
+                    bool doDelete = ImGui::Button(delId, ImVec2(iconBtnSz, iconBtnSz));
+                    ImGui::PopStyleColor(3);
+                    ImGui::PopStyleVar(2);
+
+                    if (doRename) {
+                        s_renameMode = true;
+                        s_renameIdx  = i;
+                        strncpy_s(s_renameBuf, cfgList[i].name.c_str(), 127);
+                        ImGui::PopID();
+                        break;
+                    }
+                    if (doDelete) {
+                        ConfigManager::Delete(cfgList[i].name);
+                        s_renameMode   = false;
+                        s_renameIdx    = -1;
+                        s_modifiedList = true;
+                        ImGui::PopID();
+                        break;
+                    }
+
+                    ImGui::PopID();
+                }
+
+                // --- + New Config button at the bottom ---
+                if (!s_modifiedList) {
+                    ImGui::Separator();
+                    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.14f,0.10f,0.26f,1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f,0.18f,0.46f,1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  kAccent);
+                    ImGui::PushStyleColor(ImGuiCol_Text,          kTextBright);
+                    if (ImGui::Button("+ New Config", ImVec2(-1, 0))) {
+                        int n = (int)cfgList.size() + 1;
+                        char newName[128];
+                        do {
+                            snprintf(newName, sizeof(newName), "Config %d", n++);
+                        } while ([&]{ for (auto& c : cfgList) if (c.name == newName) return true; return false; }());
+                        ConfigManager::Save(std::string(newName));
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::PopStyleColor(4);
+                }
+
+                ImGui::PopStyleVar(); // ItemSpacing
+                ImGui::EndCombo();
+            }
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor(4);
+
+            ImGui::SameLine(0, sp);
+
+            // -- SAVE button --
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 4));
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.20f,0.13f,0.38f,1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.34f,0.22f,0.58f,1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  kAccent);
+            ImGui::PushStyleColor(ImGuiCol_Text,          kTextBright);
+            if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save", ImVec2(btnW, rowH))) {
+                std::string name = (cfgSel >= 0 && cfgSel < (int)cfgList.size())
+                                   ? cfgList[cfgSel].name
+                                   : "config";
+                ConfigManager::Save(name);
+            }
+            ImGui::PopStyleColor(4);
+            ImGui::PopStyleVar();
+
+            ImGui::SameLine(0, sp);
+
+            // -- LOAD button --
+            bool canLoad = (cfgSel >= 0 && cfgSel < (int)cfgList.size());
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 4));
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.10f,0.20f,0.13f,1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.16f,0.34f,0.20f,1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.18f,0.50f,0.26f,1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text,          kTextBright);
+            if (!canLoad) ImGui::BeginDisabled();
+            if (ImGui::Button(ICON_FA_FOLDER_OPEN " Load", ImVec2(btnW, rowH))) {
+                ConfigManager::Load(cfgList[cfgSel].name);
+            }
+            if (!canLoad) ImGui::EndDisabled();
+            ImGui::PopStyleColor(4);
+            ImGui::PopStyleVar();
+
+            // Status flash (small green text just below the widget)
+            if (ConfigManager::g_fStatusTimer > 0.0f) {
+                ConfigManager::g_fStatusTimer -= ImGui::GetIO().DeltaTime;
+                float a = ConfigManager::g_fStatusTimer > 1.0f ? 1.0f : ConfigManager::g_fStatusTimer;
+                ImVec2 sp2 = ImVec2(winPos.x + startX, winPos.y + startY + rowH + 4.0f);
+                dl->AddText(sp2, IM_COL32(130, 255, 130, (int)(a * 210)),
+                            ConfigManager::g_sStatusMessage.c_str());
+            }
+        }
+        // ============================================================
 
         // ============ SIDEBAR + CONTENT ============
         float contentY = headerH;
@@ -457,22 +626,21 @@ namespace DX11Hook {
         ImVec2 sidebarStart = ImVec2(winPos.x, winPos.y + contentY);
         ImVec2 sidebarEnd = ImVec2(winPos.x + sidebarWidth, winPos.y + winSize.y - 28);
         
-        // Glassmorphism sidebar background
         dl->AddRectFilled(sidebarStart, sidebarEnd, IM_COL32(10, 9, 14, 200), 16.0f, ImDrawFlags_RoundCornersBottomLeft);
         dl->AddRect(sidebarStart, sidebarEnd, IM_COL32(60, 45, 100, 80), 16.0f, ImDrawFlags_RoundCornersBottomLeft, 1.0f);
 
         // Sidebar Tabs
-        const char* tabLabels[] = { "LEGIT", "ESP", "VISUALS", "MISC", "KILL SOUND", "SKINS", "SKY" };
-        const char* tabIcons[] = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS, ICON_FA_MUSIC, ICON_FA_SHIRT, ICON_FA_CLOUD };
+        const char* tabLabels[] = { "LEGIT", "ESP", "VISUALS", "MISC", "KILL SOUND", "SKINS", "SKY", "RAGE" };
+        const char* tabIcons[]  = { ICON_FA_CROSSHAIRS, ICON_FA_EYE, ICON_FA_PALETTE, ICON_FA_GEARS, ICON_FA_MUSIC, ICON_FA_SHIRT, ICON_FA_CLOUD, ICON_FA_GUN };
         float tabH = 50.0f;
         float tabStartY = contentY + 15.0f;
         float tabAreaHeight = (winSize.y - 28.0f) - tabStartY - 10.0f;
-        float requiredHeight = 7.0f * tabH;
+        float requiredHeight = 8.0f * tabH;
         if (requiredHeight > tabAreaHeight && tabAreaHeight > 120.0f) {
-            tabH = tabAreaHeight / 7.0f;
+            tabH = tabAreaHeight / 8.0f;
         }
 
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 8; i++) {
             ImVec2 tabStart = ImVec2(winPos.x + 8, winPos.y + tabStartY + i * tabH);
             ImVec2 tabEnd = ImVec2(tabStart.x + sidebarWidth - 16, tabStart.y + tabH);
 
@@ -483,12 +651,9 @@ namespace DX11Hook {
             bool hovered = ImGui::IsItemHovered();
             if (ImGui::IsItemClicked()) activeTab = i;
 
-            // Tab background with animation
             if (g_tabAnim[i] > 0.01f || hovered) {
                 float alpha = g_tabAnim[i] * 180 + (hovered && i != activeTab ? 40 : 0);
                 dl->AddRectFilled(tabStart, tabEnd, IM_COL32(80, 60, 140, (int)alpha), 10.0f);
-                
-                // Left accent glow line
                 int glowAlpha = (int)(g_tabAnim[i] * 255);
                 dl->AddRectFilled(ImVec2(tabStart.x, tabStart.y + 10),
                                   ImVec2(tabStart.x + 3, tabEnd.y - 10),
@@ -505,11 +670,9 @@ namespace DX11Hook {
             ImVec4 textCol = Lerp4(kTextDim, kTextBright, g_tabAnim[i]);
             if (hovered && i != activeTab) textCol = ImVec4(0.85f, 0.85f, 0.90f, 1.0f);
             
-            // Text shadow
             dl->AddText(NULL, ImGui::GetFontSize() * scale, 
                         ImVec2(tabStart.x + 16.0f + 1, tabStart.y + (tabH - textSz.y) * 0.5f + 1),
                         IM_COL32(0,0,0,100), fullLabel);
-            // Main text
             dl->AddText(NULL, ImGui::GetFontSize() * scale, 
                         ImVec2(tabStart.x + 16.0f, tabStart.y + (tabH - textSz.y) * 0.5f),
                         ToU32(textCol), fullLabel);
@@ -531,7 +694,6 @@ namespace DX11Hook {
             bool aimbotSelected = (subTab == 0);
             bool triggerbotSelected = (subTab == 1);
             
-            // Sub-tabs styling
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0,0,0,0));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.16f, 0.25f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.28f, 0.22f, 0.45f, 1.0f));
@@ -580,15 +742,15 @@ namespace DX11Hook {
                 static int boneIdxAim = 0;
                 if (StyledCombo("Target Bone", &boneIdxAim, bones, IM_ARRAYSIZE(bones))) {
                     switch (boneIdxAim) {
-                        case 0: Hooks::g_nAimbotBone = 6; break;   // Head
-                        case 1: Hooks::g_nAimbotBone = 5; break;   // Neck
-                        case 2: Hooks::g_nAimbotBone = 4; break;   // Chest (Spine)
-                        case 3: Hooks::g_nAimbotBone = 2; break;   // Pelvis
-                        case 4: Hooks::g_nAimbotBone = 3; break;   // Stomach
-                        case 5: Hooks::g_nAimbotBone = 8; break;   // Left Shoulder
-                        case 6: Hooks::g_nAimbotBone = 13; break;  // Right Shoulder
-                        case 7: Hooks::g_nAimbotBone = 22; break;  // Left Hip
-                        case 8: Hooks::g_nAimbotBone = 25; break;  // Right Hip
+                        case 0: Hooks::g_nAimbotBone = 6; break;
+                        case 1: Hooks::g_nAimbotBone = 5; break;
+                        case 2: Hooks::g_nAimbotBone = 4; break;
+                        case 3: Hooks::g_nAimbotBone = 2; break;
+                        case 4: Hooks::g_nAimbotBone = 3; break;
+                        case 5: Hooks::g_nAimbotBone = 8; break;
+                        case 6: Hooks::g_nAimbotBone = 13; break;
+                        case 7: Hooks::g_nAimbotBone = 22; break;
+                        case 8: Hooks::g_nAimbotBone = 25; break;
                     }
                 }
                 
@@ -612,7 +774,6 @@ namespace DX11Hook {
                 ImGui::SameLine();
                 ImGui::TextColored(kTextDim, "(Click to change)");
                 
-                // Show conflict warning if aimbot key conflicts with triggerbot
                 if (KeybindManager::HasKeyConflict()) {
                     ImGui::Spacing();
                     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION " Conflict: Same key as Triggerbot!");
@@ -653,19 +814,14 @@ namespace DX11Hook {
                 ImGui::SameLine();
                 ImGui::TextColored(kTextDim, "(Click to change)");
                 
-                // Show conflict warning if triggerbot key conflicts with aimbot
                 if (KeybindManager::HasKeyConflict()) {
                     ImGui::Spacing();
                     ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), ICON_FA_TRIANGLE_EXCLAMATION " Conflict: Same key as Aimbot!");
                 }
-                
-
-
             }
         }
         // ============ TAB 1: ESP ============
         else if (activeTab == 1) {
-            // Master Toggle
             ToggleSwitch("Enable ESP", &Hooks::g_bEspEnabled);
             ImGui::Spacing();
             
@@ -673,7 +829,6 @@ namespace DX11Hook {
                 ImGui::Columns(2, "esp_cols", false);
                 ImGui::SetColumnWidth(0, ImGui::GetWindowWidth() * 0.5f);
                 
-                // Visuals Column
                 SectionHeader("VISUALS");
                 ToggleSwitch("Bounding Box", &Hooks::g_bEspBoxes);
                 if (Hooks::g_bEspBoxes) {
@@ -692,8 +847,8 @@ namespace DX11Hook {
                 ToggleSwitch("Distance", &Hooks::g_bEspDistance);
                 
                 ImGui::NextColumn();
-                
-                // Glow Column
+
+                ImGui::Spacing();
                 SectionHeader("GLOW");
                 ToggleSwitch("Enable Glow", &Hooks::g_bGlowEnabled);
                 if (Hooks::g_bGlowEnabled) {
@@ -721,9 +876,10 @@ namespace DX11Hook {
             ImGui::Columns(2, "visual_cols", false);
             ImGui::SetColumnWidth(0, ImGui::GetWindowWidth() * 0.5f);
             
-            SectionHeader("REMOVALS");
+            SectionHeader("REMOVALS & VISION");
             ToggleSwitch("No Flash", &Hooks::g_bNoFlashEnabled);
             ToggleSwitch("No Smoke", &Hooks::g_bNoSmokeEnabled);
+            ToggleSwitch("Third Person", &Hooks::g_bThirdPersonEnabled);
             
             ImGui::Spacing();
             SectionHeader("FOV");
@@ -801,11 +957,7 @@ namespace DX11Hook {
                     if (slashPos != std::string::npos && slashPos + 1 < fileName.size()) {
                         fileName = fileName.substr(slashPos + 1);
                     }
-
-                    if (i == appliedIndex) {
-                        fileName += "  [APPLIED]";
-                    }
-
+                    if (i == appliedIndex) fileName += "  [APPLIED]";
                     if (ImGui::Selectable(fileName.c_str(), selectedIndex == i)) {
                         KillSound::SetSelectedIndex(i);
                         selectedIndex = i;
@@ -821,21 +973,61 @@ namespace DX11Hook {
             float totalWidth = applyWidth + browseWidth + ImGui::GetStyle().ItemSpacing.x;
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - totalWidth);
 
-            if (ImGui::Button("Apply", ImVec2(applyWidth, 0))) {
-                KillSound::ApplySelected();
-            }
+            if (ImGui::Button("Apply", ImVec2(applyWidth, 0))) KillSound::ApplySelected();
             ImGui::SameLine();
-            if (ImGui::Button("Browse", ImVec2(browseWidth, 0))) {
-                KillSound::BrowseAndAddFiles(g_hWnd);
-            }
+            if (ImGui::Button("Browse", ImVec2(browseWidth, 0))) KillSound::BrowseAndAddFiles(g_hWnd);
         }
-        // ============ TAB 5: SKINS (Inventory Changer) ============
+        // ============ TAB 5: SKINS ============
         else if (activeTab == 5) {
             InventoryUI::RenderInventoryChangerTab();
         }
         // ============ TAB 6: SKY CHANGER ============
         else if (activeTab == 6) {
             SkyChanger::RenderSkyChangerTab();
+        }
+        // ============ TAB 7: RAGE ============
+        else if (activeTab == 7) {
+            SectionHeader("SILENT AIM");
+            
+            bool saEnabled = SilentAim::config.enabled.load();
+            ToggleSwitch("Enable Silent Aim", &saEnabled);
+            SilentAim::config.enabled.store(saEnabled);
+            
+            if (SilentAim::config.enabled.load()) {
+                ImGui::Spacing();
+                
+                const char* fovModes[] = { "90 Degrees", "180 Degrees", "360 Degrees" };
+                int fovIdx = SilentAim::config.fovMode.load();
+                ImGui::Text("FOV Range");
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.10f, 0.20f, 1.0f));
+                ImGui::SetNextItemWidth(-1);
+                ImGui::Combo("##sa_fov", &fovIdx, fovModes, 3);
+                SilentAim::config.fovMode.store(fovIdx);
+                ImGui::PopStyleColor();
+                
+                ImGui::Spacing();
+                SectionHeader("OPTIONS");
+                
+                const char* boneModes[] = { "Head", "Neck", "Chest" };
+                int boneIdx = SilentAim::config.targetBone.load() == 6 ? 0 : (SilentAim::config.targetBone.load() == 5 ? 1 : 2);
+                ImGui::Text("Target Bone");
+                ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.10f, 0.20f, 1.0f));
+                ImGui::SetNextItemWidth(-1);
+                ImGui::Combo("##sa_bone", &boneIdx, boneModes, 3);
+                SilentAim::config.targetBone.store(boneIdx == 0 ? 6 : (boneIdx == 1 ? 5 : 4));
+                ImGui::PopStyleColor();
+                
+                bool teamChk = SilentAim::config.teamCheck.load();
+                ToggleSwitch("Team Check", &teamChk);
+                SilentAim::config.teamCheck.store(teamChk);
+            }
+            
+            ImGui::Spacing();
+            SectionHeader("BULLET TRACER");
+            
+            bool btEnabled = BulletTracer::config.enabled;
+            ToggleSwitch("Enable Bullet Tracers", &btEnabled);
+            BulletTracer::config.enabled = btEnabled;
         }
 
         ImGui::EndChild();
@@ -846,25 +1038,19 @@ namespace DX11Hook {
         float statusH = 28.0f;
         ImVec2 statusStart = ImVec2(winPos.x, winPos.y + winSize.y - statusH);
         
-        // Glassmorphism status bar
         dl->AddRectFilled(statusStart, ImVec2(winPos.x + winSize.x, winPos.y + winSize.y),
                           IM_COL32(12, 11, 18, 220), 16.0f, ImDrawFlags_RoundCornersBottom);
         
-        // Animated status indicator
         float pulseDot = (sinf(g_animTime * 4.0f) + 1.0f) * 0.5f;
         float dotY = statusStart.y + statusH * 0.5f;
         
-        // Outer glow
         dl->AddCircleFilled(ImVec2(winPos.x + 18, dotY), 6.0f + pulseDot * 2.0f, 
                            IM_COL32(100, 220, 120, (int)(40 + pulseDot * 40)), 16);
-        // Inner dot
         dl->AddCircleFilled(ImVec2(winPos.x + 18, dotY), 4.0f, 
                            IM_COL32(100, 240, 130, 255), 12);
         
-        // Status text with subtle glow
         dl->AddText(ImVec2(winPos.x + 32, statusStart.y + 6), ToU32(kTextDim), "System Active");
         
-        // Key hint on right
         const char* hintText = "INSERT to toggle";
         ImVec2 hintSize = ImGui::CalcTextSize(hintText);
         dl->AddText(ImVec2(winPos.x + winSize.x - hintSize.x - 16, statusStart.y + 6), 
@@ -876,7 +1062,7 @@ namespace DX11Hook {
     }
 
     // =====================================================================
-    // ApplyCustomStyle — Premium Dark-Purple Glassmorphism Theme
+    // ApplyCustomStyle
     // =====================================================================
 
     void ApplyCustomStyle() {
@@ -943,7 +1129,7 @@ namespace DX11Hook {
     }
 
     // =====================================================================
-    // Flag to skip rendering during ResizeBuffers (prevents crash on mid-transition Present)
+    // Flag to skip rendering during ResizeBuffers
     bool g_bResizing = false;
 
     HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags) {
@@ -968,14 +1154,10 @@ namespace DX11Hook {
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-                // Load fonts embedded in binary — no file paths needed at runtime
                 ImFont* mainFont = io.Fonts->AddFontFromMemoryCompressedTTF(
                     RobotoMedium_compressed_data, RobotoMedium_compressed_size, 16.0f);
-                if (!mainFont) {
-                    io.Fonts->AddFontDefault();
-                }
+                if (!mainFont) io.Fonts->AddFontDefault();
 
-                // Merge FontAwesome icons into the main font
                 static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_16_FA, 0 };
                 ImFontConfig icons_config;
                 icons_config.MergeMode = true;
@@ -987,22 +1169,26 @@ namespace DX11Hook {
                 ImGui_ImplWin32_Init(g_hWnd);
                 ImGui_ImplDX11_Init(g_pDevice, g_pContext);
 
-                // Initialize texture manager for skin previews
                 TextureMgr::Init(g_pDevice);
+
+                // Initialize config system
+                ConfigManager::Init();
 
                 g_bInitialized = true;
             }
         }
 
-        // Skip rendering entirely during ResizeBuffers — the back buffer is invalid
         if (g_bResizing || !g_bInitialized || !g_pRenderTargetView) {
             return oPresent(pSwapChain, SyncInterval, Flags);
         }
 
-        // Run skin changer BEFORE ImGui frame (matches Epstein pattern — critical for regen call)
-        // Only run when game is fully ready to prevent crashes during matchmaking/map transitions
         if (Hooks::IsGameReady()) {
-            InventoryUI::Run();
+            __try {
+                InventoryUI::Run();
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                // CRASH FIX: Wrap InventoryUI::Run in SEH — a regen call crash here
+                // would otherwise propagate up through the swapchain and crash the game.
+            }
         }
 
         ImGui_ImplDX11_NewFrame();
@@ -1012,45 +1198,37 @@ namespace DX11Hook {
         ImGuiIO& io2 = ImGui::GetIO();
         Aimbot::UpdateScreenSize((int)io2.DisplaySize.x, (int)io2.DisplaySize.y);
 
-        // Show main menu directly (startup screen disabled)
         if (g_bMenuOpen) {
             RenderMenu();
         }
 
-        // Only render ESP, Radar, and SpectatorList when game is in a valid state.
-        // Guard with SEH to prevent a transition-time memory fault from crashing the game.
         __try {
             if (Hooks::IsGameReady()) {
-                if (Hooks::g_bAimbotEnabled.load()) {
-                    Aimbot::Run();
-                }
-
-                // Bhop stamina/velocity patching only (game thread).
-                // The actual jump logic runs in the main cheat thread for consistent timing.
                 if (Hooks::g_bBhopEnabled.load()) {
                     Bunnyhop::RunGameThread();
                 }
-
                 if (Hooks::g_bEspEnabled) {
                     ESP::Render();
                 }
-
                 if (Hooks::g_bRadarEnabled) {
                     Radar::Render();
                 }
-
                 if (Hooks::g_bSpectatorListEnabled) {
                     SpectatorList::Render();
                 }
-
                 if (Hooks::g_bBombTimerEnabled) {
                     BombTimer::Render();
                 }
-
                 SkyChanger::RenderWeatherOverlay();
+                __try {
+                BulletTracer::Render();
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                // CRASH FIX: Wrap BulletTracer::Render in SEH — raw memcpy/view matrix
+                // reads can fault during map transitions if not guarded at this call-site.
+            }
+                SilentAim::RenderFOV();
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) {
-            // Recover this frame; next frame will re-evaluate game readiness.
         }
 
         ImGui::Render();
@@ -1061,12 +1239,8 @@ namespace DX11Hook {
     }
 
     HRESULT __stdcall hkResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
-        // Block Present from rendering while we're rebuilding the pipeline
         g_bResizing = true;
 
-        // Invalidate ImGui's internal DX11 objects (font texture, blend state, shaders, etc.)
-        // before releasing the render target. Without this, ImGui_ImplDX11_RenderDrawData
-        // will crash on the next Present call because it holds stale pipeline references.
         if (g_bInitialized) {
             ImGui_ImplDX11_InvalidateDeviceObjects();
         }
@@ -1085,13 +1259,11 @@ namespace DX11Hook {
             pBackBuffer->Release();
         }
 
-        // Recreate ImGui's device objects for the new pipeline state
         if (g_bInitialized) {
             ImGui_ImplDX11_CreateDeviceObjects();
         }
 
         g_bResizing = false;
-
         return hr;
     }
 

@@ -8,19 +8,13 @@
 HMODULE g_hModule = nullptr;
 
 DWORD WINAPI MainThread(LPVOID lpParam) {
-    OutputDebugStringA("[mindcheat] loaded\n");
-
     while (!Memory::GetModuleBase("client.dll") || !Memory::GetModuleBase("engine2.dll")) {
         Sleep(Constants::Timing::MODULE_WAIT_MS);
     }
 
-    OutputDebugStringA("[mindcheat] modules found\n");
     Sleep(Constants::Timing::INIT_DELAY_MS);
 
-    OutputDebugStringA("[mindcheat] initializing hooks\n");
     Hooks::Initialize();
-
-    OutputDebugStringA("[mindcheat] running\n");
 
     // Wait for unload signal
     while (true) {
@@ -30,7 +24,6 @@ DWORD WINAPI MainThread(LPVOID lpParam) {
         Sleep(Constants::Timing::MODULE_WAIT_MS);
     }
 
-    OutputDebugStringA("[mindcheat] unloading\n");
     Hooks::Shutdown();
     return 0;
 }

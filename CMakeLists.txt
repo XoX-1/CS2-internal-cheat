@@ -29,7 +29,10 @@ add_library(mindcheat SHARED
     src/features/inventory_changer.cpp
     src/features/texture_manager.cpp
     src/features/skychanger.cpp
-
+    src/features/third_person.cpp
+    src/features/silent_aim.cpp
+    src/features/bullet_tracer.cpp
+    src/features/config_manager.cpp
     # ImGui source
     vendor/imgui/imgui.cpp
     vendor/imgui/imgui_demo.cpp

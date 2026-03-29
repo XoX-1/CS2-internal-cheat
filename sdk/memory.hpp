@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <cstdint>
+#include <cstdlib>
 #include <type_traits>
 
 namespace Memory {
@@ -149,6 +150,44 @@ namespace Memory {
                 bool found = true;
                 for (size_t j = 0; j < maskLen; j++) {
                     if (mask[j] == 'x' && *reinterpret_cast<const uint8_t*>(base + i + j) != pattern[j]) {
+                        found = false;
+                        break;
+                    }
+                }
+                if (found) return base + i;
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {}
+        return 0;
+    }
+
+    // String-based pattern scan (IDA-style: "48 8B C4 ?? 89")
+    // Supports '?' and '??' as wildcards
+    inline uintptr_t StringPatternScan(uintptr_t base, size_t size, const char* pattern) {
+        // Parse the string pattern into bytes + wildcard flags
+        struct PatByte { uint8_t val; bool wild; };
+        PatByte parsed[256];
+        int count = 0;
+
+        const char* p = pattern;
+        while (*p && count < 256) {
+            while (*p == ' ') p++;
+            if (!*p) break;
+            if (*p == '?') {
+                p++;
+                if (*p == '?') p++;
+                parsed[count++] = { 0, true };
+            } else {
+                parsed[count++] = { (uint8_t)strtoul(p, const_cast<char**>(&p), 16), false };
+            }
+        }
+        if (count == 0 || size < (size_t)count) return 0;
+
+        __try {
+            const uint8_t* scan = reinterpret_cast<const uint8_t*>(base);
+            for (size_t i = 0; i <= size - count; i++) {
+                bool found = true;
+                for (int j = 0; j < count; j++) {
+                    if (!parsed[j].wild && scan[i + j] != parsed[j].val) {
                         found = false;
                         break;
                     }

@@ -10,105 +10,93 @@
 
 namespace Bunnyhop {
 
-    // CS2 button state values for direct memory write
-    // The jump button global at clientBase + buttons::jump is a uint32 state:
-    //   65537 (0x10001) = force press
-    //   256   (0x100)   = release / idle
-    static constexpr uint32_t BTN_FORCE_DOWN = 65537;
-    static constexpr uint32_t BTN_RELEASE    = 256;
+    static constexpr uint32_t BTN_PRESSED  = 65537u; // 0x10001
+    static constexpr uint32_t BTN_RELEASED = 256u;   // 0x100
+    static constexpr ptrdiff_t OFF_FLAGS   = 0x400;
 
-    // State: tracks whether we pressed jump and are waiting for airborne release
-    static bool s_jumpPressed = false;
+    // CS2 button system: the engine only registers a NEW jump on the
+    // TRANSITION from RELEASED -> PRESSED.
+    // If we hold PRESSED every iteration while on ground, the game sees
+    // only 1 jump total (no transition = no new press).
+    //
+    // Solution: track last written state. On landing:
+    //   1. Write RELEASED first (force transition)
+    //   2. Next iteration write PRESSED (game sees fresh press)
+    // In air: always RELEASED.
+
+    static bool s_wasOnGround    = false;
+    static bool s_needsRelease   = false; // true = must write RELEASED before next PRESSED
+
+    static uintptr_t GetClientBase() {
+        return reinterpret_cast<uintptr_t>(GetModuleHandleA("client.dll"));
+    }
+
+    static uintptr_t GetLocalPawn(uintptr_t clientBase) {
+        if (!clientBase) return 0;
+        uintptr_t pawn = 0;
+        if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerPawn, pawn)
+            || !Memory::IsValidPtr(pawn))
+            return 0;
+        return pawn;
+    }
 
     void Run() {
-        if (!Hooks::g_bBhopEnabled.load()) {
-            s_jumpPressed = false;
+        uintptr_t clientBase = GetClientBase();
+
+        if (!Hooks::g_bBhopEnabled.load() || !(GetAsyncKeyState(VK_SPACE) & 0x8000)) {
+            if (clientBase)
+                Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_RELEASED);
+            s_wasOnGround  = false;
+            s_needsRelease = false;
             return;
         }
 
         __try {
-            uintptr_t clientBase = Memory::GetModuleBase("client.dll");
             if (!clientBase) return;
 
-            uintptr_t entityList = 0;
-            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) ||
-                !Memory::IsValidPtr(entityList)) return;
-
-            uintptr_t localController = 0;
-            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
-                !Memory::IsValidPtr(localController)) return;
-
-            uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
+            uintptr_t localPawn = GetLocalPawn(clientBase);
             if (!localPawn) return;
 
-            // Read movement flags
             uint32_t flags = 0;
-            if (!Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BaseEntity::m_fFlags, flags)) return;
+            if (!Memory::SafeRead(localPawn + OFF_FLAGS, flags)) return;
 
-            bool onGround = (flags & Constants::Game::FL_ONGROUND) != 0;
-            bool spaceHeld = (GetAsyncKeyState(Constants::Keys::BHOP) & 0x8000) != 0;
+            bool onGround = (flags & 1u) != 0;
 
-            if (!spaceHeld) {
-                // User released space — make sure button is released
-                if (s_jumpPressed) {
-                    Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_RELEASE);
-                    s_jumpPressed = false;
-                }
-                return;
-            }
-
-            // Space is held — bhop logic
             if (onGround) {
-                // On ground: press jump
-                Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_FORCE_DOWN);
-                s_jumpPressed = true;
-            } else if (s_jumpPressed) {
-                // In air after our jump: release so it can re-trigger on next landing
-                Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_RELEASE);
-                s_jumpPressed = false;
+                if (!s_wasOnGround || s_needsRelease) {
+                    // Fresh landing OR we haven't sent the RELEASED transition yet:
+                    // Send RELEASED this iteration so next iteration PRESSED is a real transition
+                    Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_RELEASED);
+                    s_needsRelease = false;
+                } else {
+                    // Previous iter was RELEASED (from above), now send PRESSED = valid new jump
+                    Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_PRESSED);
+                    s_needsRelease = true; // must release next iter before pressing again
+                }
+            } else {
+                // In air: always release
+                Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_RELEASED);
+                s_needsRelease = false;
             }
-            
+
+            s_wasOnGround = onGround;
+
         } __except (EXCEPTION_EXECUTE_HANDLER) {
-            s_jumpPressed = false;
+            uintptr_t cb = GetClientBase();
+            if (cb) Memory::SafeWrite<uint32_t>(cb + cs2_dumper::buttons::jump, BTN_RELEASED);
+            s_wasOnGround  = false;
+            s_needsRelease = false;
         }
     }
 
-    // Called from game thread (Present hook) — zeroes stamina & velocity modifier
-    // to prevent any speed penalty from consecutive jumps.
-    void RunGameThread() {
-        if (!Hooks::g_bBhopEnabled.load()) return;
-
-        __try {
-            uintptr_t clientBase = Memory::GetModuleBase("client.dll");
-            if (!clientBase) return;
-
-            uintptr_t entityList = 0;
-            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwEntityList, entityList) ||
-                !Memory::IsValidPtr(entityList)) return;
-
-            uintptr_t localController = 0;
-            if (!Memory::SafeRead(clientBase + cs2_dumper::offsets::client_dll::dwLocalPlayerController, localController) ||
-                !Memory::IsValidPtr(localController)) return;
-
-            uintptr_t localPawn = Memory::ResolvePawnFromController(entityList, localController);
-            if (!localPawn) return;
-
-            // Zero stamina on MovementServices — prevents landing slowdown
-            uintptr_t moveServices = 0;
-            if (Memory::SafeRead(localPawn + cs2_dumper::schemas::client_dll::C_BasePlayerPawn::m_pMovementServices, moveServices) &&
-                Memory::IsValidPtr(moveServices)) {
-                Memory::SafeWrite<float>(moveServices + cs2_dumper::schemas::client_dll::CCSPlayer_MovementServices::m_flStamina, 0.0f);
-            }
-
-            // Keep velocity modifier at 1.0 — prevents any speed reduction
-            Memory::SafeWrite<float>(localPawn + cs2_dumper::schemas::client_dll::C_CSPlayerPawn::m_flVelocityModifier, 1.0f);
-
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            // Silently recover
-        }
-    }
+    void RunGameThread() { /* nothing needed */ }
 
     void Reset() {
-        s_jumpPressed = false;
+        uintptr_t clientBase = GetClientBase();
+        if (clientBase)
+            Memory::SafeWrite<uint32_t>(clientBase + cs2_dumper::buttons::jump, BTN_RELEASED);
+        s_wasOnGround  = false;
+        s_needsRelease = false;
     }
-}
+
+} // namespace Bunnyhop
